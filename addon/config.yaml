@@ -1,0 +1,18 @@
+name: Solar Sentinel
+description: Visualize your solar panel array with live per-panel power and historical time-slider
+url: https://github.com/smcneece/solar-sentinel
+version: "2026.05.1"
+slug: solar_sentinel
+init: false
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+ingress: true
+ingress_port: 8100
+panel_icon: mdi:solar-panel
+panel_title: Solar Sentinel
+homeassistant_api: true
+options: {}
+schema: {}

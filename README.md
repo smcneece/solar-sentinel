@@ -1,0 +1,262 @@
+# Solar Sentinel - Home Assistant App / Add-on
+
+Know exactly which panels are pulling their weight and which are not. Solar Sentinel connects to your existing HA Energy Dashboard and displays every inverter or micro-inverter as a live color-coded card, so you can see your array health at a glance without digging through the HA energy graphs.
+
+Should work with any solar integration already configured in the Energy Dashboard: SunPower, Enphase, Fronius, SolarEdge, and anything else that feeds per-panel or per-inverter data into HA. No extra integration setup required.
+
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/smcneece/solar-sentinel)](https://github.com/smcneece/solar-sentinel/releases)
+[![GitHub](https://img.shields.io/github/license/smcneece/solar-sentinel)](LICENSE)
+
+> ⚠️ **Installation type**: Solar Sentinel is primarily a Home Assistant **add-on** requiring a Supervisor-managed installation (HA OS or HA Supervised). **Docker support is implemented but untested.** If you run Home Assistant Container and want to give it a try, see [Docker Installation](#docker-installation-untested----looking-for-testers) below and report back. Home Assistant Core (Python package only) is not supported.
+
+> 📱 **Mobile/tablet**: Solar Sentinel is designed for desktop browsers and looks best on a 1080p or larger monitor. It may be usable on a tablet in landscape mode or a phone in landscape for quick viewing, but it is not optimized for small screens. Please do not open an issue about mobile layout; it is a known limitation, not a bug.
+
+> [![Sponsor](https://img.shields.io/badge/Sponsor-💖-pink)](https://github.com/sponsors/smcneece) If Solar Sentinel helps you spot a shaded panel, a failing micro-inverter, or just gives you something satisfying to look at on a sunny day, consider sponsoring! Even a small one-time amount shows appreciation. Check out my [other HA projects](https://github.com/smcneece?tab=repositories) while you're here.
+>
+> ⭐ **Finding this useful?** Star the repo so other HA users can find it!
+> [![GitHub stars](https://img.shields.io/github/stars/smcneece/solar-sentinel?style=social)](https://github.com/smcneece/solar-sentinel/stargazers)
+
+---
+
+## Screenshots
+
+![Main view](images/main-view.png)
+
+![Layout editor](images/layout-editor.png)
+
+![Panel detail](images/modal-details.png)
+
+![Panel history](images/modal-history.png)
+
+
+---
+
+## Features
+
+### Panel Grid
+- Auto-discovers all inverters and micro-inverters from the HA Energy Dashboard; no manual entity configuration required
+- Color-coded per-panel cards relative to the array average: green (90%+), yellow (70-89%), red (below 70%), gray (offline or unavailable)
+- Live wattage display on each panel card
+- Today's energy (Wh) shown on each card, updated as the time slider moves
+- Click any panel card to open the panel detail modal:
+  - **Details tab**: live sensor readings for every sensor on that device (power, energy, temperature, voltage, amps, frequency, last-reported timestamp); sensor labels are auto-shortened by stripping the common device name prefix
+  - **History tab**: per-panel power history chart with selectable ranges (7d, 30d, 90d, 6m, 1y) using HA long-term statistics
+  - **Rename**: edit the panel name directly in the modal; the new name is written back to the HA entity registry (not just a local label), so the name is consistent across all of HA; leave blank to revert to the integration-provided name
+
+### Grid Layout Editor
+- Drag-and-drop layout editor to position panel cards to match your physical roof layout
+- Configurable grid size (rows and columns)
+- Placed panels render in the defined positions; unplaced panels appear in a row below the grid
+- Layout is saved and persists across restarts
+
+### Sun Arc
+- Animated sun arc showing dawn, sunrise, solar noon, sunset, and dusk for today
+- Night arc extension shows the underground sun path before dawn and after dusk, so the arc wraps the full day
+- Optional moon phase icon in the pre-dawn area; uses the HA Moon integration if installed (gracefully absent if not)
+- Current sun position indicator tracks the sun in real time or matches the time slider position in history mode
+
+### Time Slider and History
+- Scrub through the current day using the time slider; all panel cards update to show power output at that moment
+- Today's Wh values update via trapezoidal integration as you move the slider, matching the estimated energy produced up to that point
+- Date picker and day navigation arrows to view any historical day
+- Switch back to live mode at any time
+- When detailed recorder data is available, history is shown at full per-state resolution
+- When recorder data has been purged (older than `purge_keep_days`), Solar Sentinel automatically falls back to HA's long-term statistics, which provide hourly average power readings; the time label shows "(hourly)" when this is active
+- HA's default recorder retention is 10 days; see [History retention](#history-retention) below to extend it
+
+### Configuration and Display
+- Help / About modal: shows app version, HA version, install mode, inverters found, and HA timezone; quick links to documentation, changelog, and issue tracker
+- Settings modal: configurable refresh interval; Re-discover button to force a fresh inverter scan without restarting the add-on
+- Light and dark theme support; follows HA or system preference automatically
+- Docker environment support via environment variables (HA_BASE_URL + HA_TOKEN)
+- No Lovelace configuration required
+
+---
+
+## Installation
+
+### Via App Store (Recommended)
+
+**Option A: Shortcut button** (requires [My Home Assistant](https://my.home-assistant.io/) to be configured):
+
+[![Add repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fsmcneece%2Fsolar-sentinel)
+
+> ⚠️ **If this button does not work**, use Option B below. The My HA redirect may not prefill the repository dialog on all HA versions.
+
+**Option B: Manual repository add** (works on all installations):
+
+1. In Home Assistant go to **Settings → Apps → Install App**
+2. Click the **⋮** menu (top right) and select **Repositories**
+3. Click **+ Add** (bottom right corner)
+4. Paste `https://github.com/smcneece/solar-sentinel` in the box and click **Add**
+
+Once the repository is added:
+
+1. Find **Solar Sentinel** in the App Store and click it.
+2. Click **Install** and wait a moment for it to download.
+3. Enable **Start on boot** and **Auto-update**.
+4. Enable **Show in sidebar** for quick access from the HA menu.
+5. Click **Start**.
+6. Click **Open Web UI** or use the Solar Sentinel link in the sidebar.
+
+### Manual Installation
+
+> ⚠️ **No automatic updates**: local add-ons are not tracked by the Supervisor. You will not receive update notifications; you must check [GitHub releases](https://github.com/smcneece/solar-sentinel/releases) manually and re-copy files for each new version. The repository install method above is strongly recommended.
+
+1. Copy the `addon` folder from this repository to `/addons/solar-sentinel/` on your Home Assistant host.
+2. Go to **Settings > Apps > App Store**, click the menu and select **Check for updates**.
+3. Solar Sentinel will appear under **Local add-ons**. Click **Install**, then **Start**.
+
+### Docker Installation *(untested; looking for testers)*
+
+> **Untested:** The Docker code path is implemented and should work in theory, but has not been tested against a real Home Assistant Container install. If you run it and it works, great. Please [open an issue](https://github.com/smcneece/solar-sentinel/issues) and let us know. If it doesn't, also open an issue and we'll fix it.
+
+For users running Home Assistant Container or any standalone HA instance, Solar Sentinel can run as a plain Docker container. You will need a [long-lived access token](https://www.home-assistant.io/docs/authentication/#your-account-profile) from your HA profile page.
+
+```bash
+git clone https://github.com/smcneece/solar-sentinel
+cd solar-sentinel/addon
+docker build -t solar-sentinel .
+docker run -d \
+  --name solar-sentinel \
+  --network host \
+  --restart unless-stopped \
+  -v /path/to/data:/data \
+  -e HA_BASE_URL=http://your-ha-ip:8123 \
+  -e HA_TOKEN=your-long-lived-token \
+  solar-sentinel
+```
+
+Replace `/path/to/data` with a local directory for persistent storage, `your-ha-ip:8123` with your HA address, and `your-long-lived-token` with the token from your HA profile. The UI is accessible at `http://your-host-ip:8100` once the container is running. Ingress is not available in Docker mode; access the UI directly via the port.
+
+> ⚠️ **Updates are manual in Docker mode.** To get notified of new releases, click **Watch → Custom → Releases** on the [GitHub repository](https://github.com/smcneece/solar-sentinel). GitHub will email you when a new version is published. Then `git pull`, rebuild the image, and restart the container to update.
+
+---
+
+## Data & Backups
+
+Solar Sentinel stores panel layout and settings (custom names, refresh interval) in a single JSON file managed by the Home Assistant Supervisor. This file is separate from the add-on code and is included automatically in standard Home Assistant full backups; no special steps required. Custom panel names written back to the HA entity registry are part of HA's own data and are backed up with HA as normal.
+
+---
+
+## Requirements
+
+- **Home Assistant OS** or **Home Assistant Supervised**: the Supervisor is required to install and run add-ons. Home Assistant Core installations cannot use add-ons.
+- **Energy Dashboard configured**: Solar Sentinel reads the solar sources you have already set up in HA's Energy Dashboard. At least one solar integration feeding the Energy Dashboard is required.
+- No additional configuration; the add-on connects to HA automatically via the Supervisor API
+
+### Optional: Moon phase display
+
+The sun arc can show the current moon phase as an emoji icon in the pre-dawn area. This requires the built-in **Moon** integration to be installed in HA.
+
+To install it: **Settings > Devices & Services > Add Integration**, search for "Moon", and add it. No configuration is needed. Solar Sentinel picks up the `sensor.moon` entity automatically on the next refresh.
+
+If the Moon integration is not installed, the sun arc works normally and the moon icon is simply not shown.
+
+### Tested integrations
+
+Solar Sentinel has been tested with:
+
+- **ha-esunpower** (SunPower): per-micro-inverter power sensors in watts and kilowatts
+- Any other integration that feeds per-panel or per-inverter energy sensors into the HA Energy Dashboard should work the same way
+
+---
+
+## Configuration
+
+All configuration is done within the add-on UI via the Settings modal (gear icon in the header). There is no YAML to edit.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Refresh interval | 5 min | How often Solar Sentinel polls HA for current panel states (minimum 10 seconds) |
+| Minimum array average | 5 W | When the array-wide average wattage is below this value, all panel wattage is displayed as 0 W. Prevents stale cached readings from appearing as real production (common with integrations that hold the last known value overnight). Set to 0 to always show the raw value from HA. |
+| Re-discover | button | Forces a fresh inverter scan using the Energy Dashboard; clears the cached inverter list and re-runs discovery on the next refresh cycle |
+
+---
+
+## History Retention
+
+Solar Sentinel uses two HA data sources for historical panel data:
+
+**Short-term recorder** (full resolution): HA records every state change for all entities. By default this data is kept for **10 days** and then purged. Solar Sentinel uses this for the time slider when available.
+
+**Long-term statistics** (hourly resolution): HA aggregates hourly statistics for sensors indefinitely. Solar Sentinel automatically falls back to this when recorder data has been purged. The time slider still works but shows hourly average power readings instead of per-state-change data. The time label shows "(hourly)" when this mode is active.
+
+### Extending recorder retention
+
+To keep detailed history longer than 10 days, add this to your `configuration.yaml` and restart HA:
+
+```yaml
+recorder:
+  purge_keep_days: 30
+```
+
+Set `purge_keep_days` to however many days you want. Keep in mind that longer retention increases the size of the HA database. 30 days is a reasonable value for most setups; beyond 90 days the database can become very large depending on how many entities HA is tracking.
+
+Note: increasing `purge_keep_days` only affects data going forward. Data already purged cannot be recovered; those dates will continue to show hourly statistics.
+
+---
+
+## How Discovery Works
+
+Solar Sentinel reads the solar sources from HA's Energy Dashboard (`/api/config/energy/`). Each energy source points to a per-panel or per-inverter energy entity. Solar Sentinel maps those energy entities to their parent devices via the HA entity registry, then finds the corresponding power (wattage) sensor on each device.
+
+This device-centric approach means system-level entities (gateway sensors, virtual production totals, power meters that span the whole array) are automatically excluded from the panel grid. Only entities that belong to the same device as an Energy Dashboard entry are included.
+
+If your panel count looks wrong, click the Re-discover button in Settings to force a fresh scan.
+
+---
+
+## Browser Support
+
+Solar Sentinel works in all modern desktop and mobile browsers. The panel grid is designed for desktop-width screens; on narrow mobile screens the grid wraps to fewer columns and panel cards scale down. The sun arc and time slider are fully functional on mobile.
+
+---
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full version history.
+
+---
+
+## Contributing
+
+Pull requests are welcome. A few things to keep in mind before opening one:
+
+**Test your changes against a real Home Assistant instance.** PRs that have not been run will be closed.
+
+**Describe what you tested.** In your PR description, say what environment you ran it in (Supervisor add-on, Docker, etc.) and what functionality you verified. Be specific about what you tested and what you could not test.
+
+**Rebase against the current main branch** before opening a PR.
+
+---
+
+## Support
+
+- **Issues & bug reports**: [GitHub Issues](https://github.com/smcneece/solar-sentinel/issues)
+- **Feature requests & general questions**: [GitHub Issues](https://github.com/smcneece/solar-sentinel/issues)
+- **Community**: [Home Assistant Community Forum](https://community.home-assistant.io/)
+
+---
+
+## Related
+
+- [Battery Sentinel](https://github.com/smcneece/battery-sentinel) - companion App/add-on for battery device, Z-Wave node, and Zigbee device monitoring and alerts
+- [Enhanced SunPower](https://github.com/smcneece/ha-esunpower) - integration for Home Assistant with per-micro-inverter power and energy sensors; the integration Solar Sentinel was originally built and tested with
+
+---
+
+## Keywords
+
+**Solar integrations:** SunPower, ha-esunpower, Enphase, Fronius, SolarEdge, solar micro-inverter, solar panel monitoring  
+**Software:** Home Assistant, Home Assistant add-on, Supervisor, Home Assistant OS, Home Assistant Supervised, ingress UI  
+**Features:** Solar panel dashboard, per-panel power, solar array health, solar energy today, time slider, sun arc, moon phase, panel rename, color-coded grid, Energy Dashboard
+
+<!-- 
+SEO Keywords: home assistant solar monitor, home assistant solar panel dashboard, solar sentinel,
+home assistant add-on, supervisor add-on, ha addon, solar panel power, per panel solar,
+solar array visualization, solar energy dashboard, micro-inverter monitor, SunPower home assistant,
+Enphase home assistant, Fronius home assistant, SolarEdge home assistant,
+home assistant solar tracker, solar panel wattage, solar today energy, solar time slider,
+ha ingress, home assistant sidebar, solar sentinel addon, smcneece, solar-sentinel
+-->
