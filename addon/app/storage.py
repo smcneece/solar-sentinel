@@ -73,13 +73,18 @@ def save_layout(layout: dict) -> dict:
 
 
 def get_grid() -> dict:
-    """Returns grid config: {rows, cols, positions: {entity_id: [row, col]}}."""
+    """Returns grid config: {rows, cols, positions, rotations, labels, fine_factor (if present)}."""
     raw = _load().get("grid", {})
-    return {
+    result = {
         "rows": int(raw.get("rows", 4)),
         "cols": int(raw.get("cols", 16)),
         "positions": raw.get("positions", {}),
+        "rotations": raw.get("rotations", {}),
+        "labels": raw.get("labels", []),
     }
+    if raw.get("fine_factor"):
+        result["fine_factor"] = raw["fine_factor"]
+    return result
 
 
 def save_grid(update: dict) -> dict:
@@ -89,7 +94,13 @@ def save_grid(update: dict) -> dict:
         "rows": max(1, int(update.get("rows", existing.get("rows", 4)))),
         "cols": max(1, int(update.get("cols", existing.get("cols", 16)))),
         "positions": update.get("positions", existing.get("positions", {})),
+        "rotations": update.get("rotations", existing.get("rotations", {})),
+        "labels": update.get("labels", existing.get("labels", [])),
     }
+    if update.get("fine_factor"):
+        result["fine_factor"] = update["fine_factor"]
+    elif existing.get("fine_factor"):
+        result["fine_factor"] = existing["fine_factor"]
     data["grid"] = result
     _save(data)
     return result

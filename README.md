@@ -45,9 +45,20 @@ Should work with any solar integration already configured in the Energy Dashboar
 
 ### Grid Layout Editor
 - Drag-and-drop layout editor to position panel cards to match your physical roof layout
-- Configurable grid size (rows and columns)
-- Placed panels render in the defined positions; unplaced panels appear in a row below the grid
+- Fine grid with sub-panel precision: the editor shows a graph paper grid where each panel occupies a 4x3 block of squares, letting you place panels with finer alignment than one panel width; the grid lines disappear when you exit the editor
+- Panel rotation: double-click any placed panel to toggle between landscape and portrait orientation (wider or taller footprint)
+- Overlap prevention: the editor rejects any drop that would cause panels to overlap
+- Configurable grid size: +/- buttons step by one fine grid cell for precise sizing; insert row (↑) and insert column (←) buttons add a row at the top or column at the left and shift all panels and labels to make room, so you can add space between sections without manually repositioning everything
+- Section labels: click "+ Label" in the toolbar to drop a text box onto the grid; type to name a section ("Garage", "House Panels", etc.); the label auto-expands to fit the text as you type; drag to reposition; visible in both edit and view modes
+- Placed panels render in the defined positions; unplaced panels appear in a tray below the grid
 - Layout is saved and persists across restarts
+- Export and import layout: download your panel positions, rotations, labels, and custom names as a JSON file; import it on another HA instance to replicate the layout without placing panels manually
+
+### Production Chart
+- Array-level production bar chart displayed alongside the sun arc
+- Four views: Today (hourly bars, updates with each refresh), Week (last 5 Sun-Sat calendar weeks), Month (current month plus previous 11), Year (all available years)
+- Total kWh for the selected range shown in the header
+- Stale overnight sensor readings are suppressed using the same threshold as the panel grid
 
 ### Sun Arc
 - Animated sun arc showing dawn, sunrise, solar noon, sunset, and dusk for today
@@ -66,7 +77,7 @@ Should work with any solar integration already configured in the Energy Dashboar
 
 ### Configuration and Display
 - Help / About modal: shows app version, HA version, install mode, inverters found, and HA timezone; quick links to documentation, changelog, and issue tracker
-- Settings modal: configurable refresh interval; Re-discover button to force a fresh inverter scan without restarting the add-on
+- Settings modal: configurable refresh interval; Re-discover button to force a fresh inverter scan without restarting the add-on; Export and Import Layout buttons for transferring panel layouts between HA instances
 - Light and dark theme support; follows HA or system preference automatically
 - Docker environment support via environment variables (HA_BASE_URL + HA_TOKEN)
 - No Lovelace configuration required
@@ -164,7 +175,7 @@ Solar Sentinel has been tested with:
 
 ## Configuration
 
-All configuration is done within the add-on UI via the Settings modal (gear icon in the header). There is no YAML to edit.
+All configuration is done within the add-on UI via the Settings modal (the gear icon labeled "Settings" in the header). There is no YAML to edit.
 
 | Setting | Default | Description |
 |---------|---------|-------------|

@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "2026.05.1"
+VERSION = "2026.05.2"
 
 _inverters: list = []        # discovered inverter descriptors
 _panels_cache: list = []     # latest computed panel states
@@ -142,6 +142,14 @@ async def handle_index(request):
 
 async def handle_icon(request):
     return web.FileResponse("/app/icon.png")
+
+
+async def handle_app_css(request):
+    return web.FileResponse("/app/app.css")
+
+
+async def handle_app_js(request):
+    return web.FileResponse("/app/app.js")
 
 
 async def handle_api_panels(request):
@@ -580,6 +588,8 @@ def main():
 
     app.router.add_get("/",                       handle_index)
     app.router.add_get("/icon.png",               handle_icon)
+    app.router.add_get("/app.css",                handle_app_css)
+    app.router.add_get("/app.js",                 handle_app_js)
     app.router.add_get("/api/panels",             handle_api_panels)
     app.router.add_get("/api/sun",                handle_api_sun)
     app.router.add_get("/api/history",            handle_api_history)
