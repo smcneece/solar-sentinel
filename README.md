@@ -20,11 +20,19 @@ Should work with any solar integration already configured in the Energy Dashboar
 
 ## Screenshots
 
+**Main View**
+
 ![Main view](images/main-view.png)
+
+**Layout Editor**
 
 ![Layout editor](images/layout-editor.png)
 
+**Panel Details**
+
 ![Panel detail](images/modal-details.png)
+
+**Panel History**
 
 ![Panel history](images/modal-history.png)
 
