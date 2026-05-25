@@ -1,5 +1,7 @@
 # Changelog
 
+For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
+
 ## v2026.05.3 - May 24, 2026
 
 - Added panel-equivalent count label to the layout editor toolbar (e.g. "4 x 16 panels") so fine grid dimensions are easier to understand; updates live as grid is resized
