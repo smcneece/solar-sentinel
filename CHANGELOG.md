@@ -1,5 +1,14 @@
 # Changelog
 
+## v2026.05.3 - May 2026
+
+- Added panel-equivalent count label to the layout editor toolbar (e.g. "4 x 16 panels") so fine grid dimensions are easier to understand; updates live as grid is resized
+- Added Reset Layout button in the layout editor (left of Save Layout) with a confirmation modal; resets the grid to the 4x16 panel default and moves all panels and labels to the unplaced area
+- Added Default: Landscape / Default: Portrait orientation toggle next to the unplaced bank label; sets the rotation applied when dragging panels from the bank to the grid; the tray visually updates to show panels at the selected shape so you can see the orientation before placing
+- Fixed unplaced bank panels displaying as squares; now shown at the correct landscape or portrait aspect ratio with a fine grid overlay (4x3 or 3x4 cells) so you can see how each panel will occupy the grid
+- Raised minimum refresh interval from 10 to 30 seconds to avoid excess load on slower HA hardware
+- Removed the 300-second upper cap on the refresh interval setting; no maximum is now enforced
+
 ## v2026.05.2 - May 23, 2026
 
 - Added hover tooltip on production chart bars showing label and kWh value

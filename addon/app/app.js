@@ -23,6 +23,7 @@ let _editCols = 16;
 let _dragEntityId = null;
 let _dragLabelId = null;
 let _editLabels = [];
+let _bankDefaultRotation = 0; // 0 = landscape, 1 = portrait
 
 // ── Utilities ────────────────────────────────────────────────────────────
 
@@ -261,8 +262,10 @@ function renderEditMode(panels) {
     <span class="grid-sz-val" id="cols-val">${_editCols}</span>
     <button class="grid-sz-btn" id="cols-inc">+</button>
     <button class="grid-sz-btn" id="cols-ins" title="Insert one column at left; shifts all panels and labels right">&#8592;</button>
+    <span class="grid-size-label" style="margin-left:0.5rem;color:var(--text-dim)">(${Math.round(_editRows/FINE_H)} &times; ${Math.round(_editCols/FINE_W)} panels)</span>
     <button class="modal-btn" id="add-label-btn" style="margin-left:0.4rem">+ Label</button>
     <span style="flex:1"></span>
+    <button class="modal-btn" id="edit-reset-btn">Reset Layout</button>
     <button class="modal-btn modal-btn-primary" id="edit-save-btn">Save Layout</button>
     <button class="modal-btn" id="edit-cancel-btn">Cancel</button>
   `;
@@ -414,8 +417,10 @@ function renderEditMode(panels) {
         const tr = parseInt(cell.dataset.row), tc = parseInt(cell.dataset.col);
         if (_dragEntityId) {
           if (wouldOverlap(tr, tc, _dragEntityId)) return;
+          const wasUnplaced = !(_dragEntityId in _editPositions);
           delete _editPositions[_dragEntityId];
           _editPositions[_dragEntityId] = [tr, tc];
+          if (wasUnplaced) _editRotations[_dragEntityId] = _bankDefaultRotation;
           renderEditMode(_panels);
         } else if (_dragLabelId) {
           const lbl = _editLabels.find(l => l.id === _dragLabelId);
@@ -447,11 +452,28 @@ function renderEditMode(panels) {
   });
   const bankLabel = document.createElement('div');
   bankLabel.className = 'unplaced-label';
-  bankLabel.textContent = unplaced.length > 0
+  bankLabel.style.display = 'flex';
+  bankLabel.style.alignItems = 'center';
+  bankLabel.style.gap = '0.5rem';
+  const bankLabelText = document.createElement('span');
+  bankLabelText.textContent = unplaced.length > 0
     ? 'Drag panels to the grid above. Drop here to unplace.'
     : 'All panels placed. Drop here to unplace.';
+  const orientBtn = document.createElement('button');
+  orientBtn.className = 'modal-btn';
+  orientBtn.id = 'bank-orientation-btn';
+  orientBtn.style.cssText = 'font-size:0.72rem;padding:0.15rem 0.5rem;flex-shrink:0';
+  orientBtn.title = 'Default orientation for panels placed from the bank';
+  orientBtn.textContent = _bankDefaultRotation ? 'Default: Portrait' : 'Default: Landscape';
+  orientBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    _bankDefaultRotation = _bankDefaultRotation ? 0 : 1;
+    renderEditMode(_panels);
+  });
+  bankLabel.appendChild(bankLabelText);
+  bankLabel.appendChild(orientBtn);
   const tray = document.createElement('div');
-  tray.className = 'unplaced-tray';
+  tray.className = 'unplaced-tray' + (_bankDefaultRotation ? ' portrait' : '');
   for (const p of unplaced) {
     const bc = makePanelCard(p, true);
     bc.addEventListener('dragend', () => renderEditMode(_panels));
@@ -483,6 +505,7 @@ function renderEditMode(panels) {
     _editLabels.push({id: 'lbl_' + Math.random().toString(36).slice(2, 9), text: 'Label', row: 0, col: 0, spanCols: FINE_W, spanRows: 1});
     renderEditMode(_panels);
   });
+  document.getElementById('edit-reset-btn').addEventListener('click', () => openModal('reset-confirm-modal'));
   document.getElementById('edit-save-btn').addEventListener('click', () => exitEditMode(true));
   document.getElementById('edit-cancel-btn').addEventListener('click', () => exitEditMode(false));
 }
@@ -1393,6 +1416,19 @@ async function init() {
   });
 
   document.getElementById('edit-layout-btn').addEventListener('click', enterEditMode);
+  document.getElementById('reset-confirm-no').addEventListener('click', () => closeModal('reset-confirm-modal'));
+  document.getElementById('reset-confirm-yes').addEventListener('click', () => {
+    _editPositions = {};
+    _editRotations = {};
+    _editLabels = [];
+    _editRows = 4 * FINE_H;
+    _editCols = 16 * FINE_W;
+    closeModal('reset-confirm-modal');
+    renderEditMode(_panels);
+  });
+  document.getElementById('reset-confirm-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal('reset-confirm-modal');
+  });
   document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('settings-close').addEventListener('click', () => closeModal('settings-modal'));
   document.getElementById('settings-modal').addEventListener('click', e => {

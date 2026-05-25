@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "2026.05.2"
+VERSION = "2026.05.3"
 
 _inverters: list = []        # discovered inverter descriptors
 _panels_cache: list = []     # latest computed panel states
@@ -129,7 +129,7 @@ async def refresh_loop():
         except Exception:
             _LOGGER.exception("Refresh failed")
         settings = storage.get_settings()
-        interval = max(10, int(settings.get("refresh_interval", 300)))
+        interval = max(30, int(settings.get("refresh_interval", 300)))
         await asyncio.sleep(interval)
 
 

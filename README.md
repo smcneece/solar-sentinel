@@ -7,7 +7,7 @@ Should work with any solar integration already configured in the Energy Dashboar
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/smcneece/solar-sentinel)](https://github.com/smcneece/solar-sentinel/releases)
 [![GitHub](https://img.shields.io/github/license/smcneece/solar-sentinel)](LICENSE)
 
-> ⚠️ **Installation type**: Solar Sentinel is primarily a Home Assistant **add-on** requiring a Supervisor-managed installation (HA OS or HA Supervised). **Docker support is implemented but untested.** If you run Home Assistant Container and want to give it a try, see [Docker Installation](#docker-installation-untested----looking-for-testers) below and report back. Home Assistant Core (Python package only) is not supported.
+> ⚠️ **Installation type**: Solar Sentinel is primarily a Home Assistant **App** (used to be called Add-on's) requiring a Supervisor-managed installation (HA OS or HA Supervised). **Docker support is implemented but untested.** If you run Home Assistant Container and want to give it a try, see [Docker Installation](#docker-installation-untested----looking-for-testers) below and report back. Home Assistant Core (Python package only) is not supported.
 
 > 📱 **Mobile/tablet**: Solar Sentinel is designed for desktop browsers and looks best on a 1080p or larger monitor. It may be usable on a tablet in landscape mode or a phone in landscape for quick viewing, but it is not optimized for small screens. Please do not open an issue about mobile layout; it is a known limitation, not a bug.
 
@@ -152,32 +152,26 @@ Replace `/path/to/data` with a local directory for persistent storage, `your-ha-
 
 ---
 
-## Data & Backups
+## First Steps
 
-Solar Sentinel stores panel layout and settings (custom names, refresh interval) in a single JSON file managed by the Home Assistant Supervisor. This file is separate from the add-on code and is included automatically in standard Home Assistant full backups; no special steps required. Custom panel names written back to the HA entity registry are part of HA's own data and are backed up with HA as normal.
+After installation, two things will make the most difference:
 
----
+### 1. Set Your Refresh Interval
 
-## Requirements
+Open **Settings** (the gear icon in the header) and set the refresh interval to match your solar integration's polling frequency. The default is 5 minutes, which works well for Enhanced SunPower and similar integrations whose hardware updates every 5 minutes. If your integration polls more frequently, lower the value; the minimum is 30 seconds. Setting it shorter than your integration actually refreshes only adds load with no benefit.
 
-- **Home Assistant OS** or **Home Assistant Supervised**: the Supervisor is required to install and run add-ons. Home Assistant Core installations cannot use add-ons.
-- **Energy Dashboard configured**: Solar Sentinel reads the solar sources you have already set up in HA's Energy Dashboard. At least one solar integration feeding the Energy Dashboard is required.
-- No additional configuration; the add-on connects to HA automatically via the Supervisor API
+### 2. Set Up Your Panel Layout
 
-### Optional: Moon phase display
+Out of the box, all discovered panels appear in an unplaced tray below the grid. Click **Layout Editor** in the header to open the editor:
 
-The sun arc can show the current moon phase as an emoji icon in the pre-dawn area. This requires the built-in **Moon** integration to be installed in HA.
+1. If most or all of your panels are portrait (taller than wide), click the **Default: Landscape** button in the tray area to switch it to **Default: Portrait** before you start placing. Panels dragged from the tray will then land in portrait orientation automatically.
+2. Drag panels from the tray at the bottom onto the grid to match your physical roof layout.
+3. Use the **+/-** row and column buttons to size the grid, or the insert buttons (↑ row, ← col) to add space between sections.
+4. **Double-click** any placed panel to toggle its individual orientation between landscape and portrait.
+5. Click **+ Label** to add a section label (such as "Garage" or "South Roof") and drag it into position.
+6. Click **Save Layout** when you are done.
 
-To install it: **Settings > Devices & Services > Add Integration**, search for "Moon", and add it. No configuration is needed. Solar Sentinel picks up the `sensor.moon` entity automatically on the next refresh.
-
-If the Moon integration is not installed, the sun arc works normally and the moon icon is simply not shown.
-
-### Tested integrations
-
-Solar Sentinel has been tested with:
-
-- **ha-esunpower** (SunPower): per-micro-inverter power sensors in watts and kilowatts
-- Any other integration that feeds per-panel or per-inverter energy sensors into the HA Energy Dashboard should work the same way
+The layout persists across restarts. Use the **Reset Layout** button in the editor toolbar to start over.
 
 ---
 
@@ -187,9 +181,13 @@ All configuration is done within the add-on UI via the Settings modal (the gear 
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Refresh interval | 5 min | How often Solar Sentinel polls HA for current panel states (minimum 10 seconds) |
+| Refresh interval | 5 min | How often Solar Sentinel polls HA for current panel states (minimum 30 seconds). Set this to match your integration's polling frequency. For SunPower and other integrations limited by inverter firmware, the hardware typically updates every 5 minutes, so polling more frequently returns the same data. Integrations that support faster sensor updates can use a lower value. |
 | Minimum array average | 5 W | When the array-wide average wattage is below this value, all panel wattage is displayed as 0 W. Prevents stale cached readings from appearing as real production (common with integrations that hold the last known value overnight). Set to 0 to always show the raw value from HA. |
 | Re-discover | button | Forces a fresh inverter scan using the Energy Dashboard; clears the cached inverter list and re-runs discovery on the next refresh cycle |
+
+### Optional: Moon Phase
+
+The sun arc can show the current moon phase as an emoji icon in the pre-dawn area. This requires the built-in **Moon** integration. To install it: **Settings > Devices & Services > Add Integration**, search for "Moon", and add it. No configuration is needed; Solar Sentinel picks up `sensor.moon` automatically on the next refresh. If the Moon integration is not installed, the sun arc works normally and the icon is simply absent.
 
 ---
 
@@ -235,6 +233,12 @@ Solar Sentinel works in all modern desktop and mobile browsers. The panel grid i
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history.
+
+---
+
+## Data & Backups
+
+Solar Sentinel stores panel layout and settings (custom names, refresh interval) in a single JSON file managed by the Home Assistant Supervisor. This file is separate from the add-on code and is included automatically in standard Home Assistant full backups; no special steps required. Custom panel names written back to the HA entity registry are part of HA's own data and are backed up with HA as normal.
 
 ---
 

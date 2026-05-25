@@ -99,7 +99,7 @@
     <button class="modal-close" id="settings-close">&#x2715;</button>
     <div class="settings-row">
       <label for="setting-interval">Refresh interval (seconds)</label>
-      <input type="number" class="settings-input" id="setting-interval" min="10" max="300" value="30">
+      <input type="number" class="settings-input" id="setting-interval" min="30" value="30">
     </div>
     <div class="settings-row">
       <label for="setting-min-avg-w">Minimum array average (W) to show live power (0 = disabled)</label>
@@ -164,6 +164,17 @@
   </div>
 </div>
 
+<!-- Reset layout confirmation modal -->
+<div class="modal-overlay" id="reset-confirm-modal">
+  <div class="modal-card" style="max-width:340px">
+    <div class="modal-title">Reset Layout?</div>
+    <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:1.2rem">All panels will be moved to the unplaced area and all section labels will be removed. This cannot be undone.</p>
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-primary" id="reset-confirm-no" autofocus>Cancel</button>
+      <button class="modal-btn" id="reset-confirm-yes" style="color:var(--red);border-color:var(--red-border)">Reset Layout</button>
+    </div>
+  </div>
+</div>
 
 <script>const BASE = '{{BASE}}';</script>
 <script src="{{BASE}}/app.js"></script>
