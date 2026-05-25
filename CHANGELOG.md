@@ -1,6 +1,6 @@
 # Changelog
 
-## v2026.05.3 - May 2026
+## v2026.05.3 - May 24, 2026
 
 - Added panel-equivalent count label to the layout editor toolbar (e.g. "4 x 16 panels") so fine grid dimensions are easier to understand; updates live as grid is resized
 - Added Reset Layout button in the layout editor (left of Save Layout) with a confirmation modal; resets the grid to the 4x16 panel default and moves all panels and labels to the unplaced area
