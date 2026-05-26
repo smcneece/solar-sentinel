@@ -13,6 +13,7 @@ For full release notes and details on each version, see the [GitHub Releases pag
 - Moon phase icon terminator shape corrected: was appearing egg-shaped due to a too-flat ellipse; now renders with a more realistic curve and is clipped to the moon disc so the lit area cannot extend outside the circle
 - Fixed grid chart not updating when the date picker is changed to a past date; now refreshes alongside the production chart
 - Added Copy Debug Info button in Help/About: copies a JSON snapshot of the Energy Dashboard config and associated entity states to the clipboard; intended for issue reporting
+- Refactored frontend into ES modules (state.js, utils.js, arc.js, charts.js, panels.js, layout.js, app.js); no user-visible change, but makes the codebase significantly easier to maintain and extend
 
 ## v2026.05.3 - May 24, 2026
 
