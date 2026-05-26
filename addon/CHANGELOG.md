@@ -14,6 +14,7 @@ For full release notes and details on each version, see the [GitHub Releases pag
 - Fixed grid chart not updating when the date picker is changed to a past date; now refreshes alongside the production chart
 - Added Copy Debug Info button in Help/About: copies a JSON snapshot of the Energy Dashboard config and associated entity states to the clipboard; intended for issue reporting
 - Refactored frontend into ES modules (state.js, utils.js, arc.js, charts.js, panels.js, layout.js, app.js); no user-visible change, but makes the codebase significantly easier to maintain and extend
+- **After updating, do a hard refresh (Ctrl+F5) in your browser** to clear cached JS files and see the new charts
 
 ## v2026.05.3 - May 24, 2026
 
