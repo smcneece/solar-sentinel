@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -29,6 +29,26 @@
 </div>
 
 <div class="arc-section">
+  <!-- Grid import/export chart (left of sun arc) -->
+  <div class="arc-grid-panel" id="arc-grid-panel" style="display:none">
+    <div class="chart-panel-header">
+      <span class="chart-panel-title">Grid</span>
+      <span class="chart-total-kwh" id="grid-chart-total">-- kWh</span>
+    </div>
+    <div class="chart-panel-body grid-chart-body">
+      <div class="chart-canvas-wrap">
+        <canvas id="grid-chart"></canvas>
+        <canvas id="grid-crosshair" class="chart-crosshair"></canvas>
+        <div class="chart-tooltip" id="grid-chart-tooltip"></div>
+      </div>
+      <div class="chart-tabs-vert chart-tabs-right">
+        <button class="grid-chart-tab active" data-range="today">Today</button>
+        <button class="grid-chart-tab" data-range="week">Week</button>
+        <button class="grid-chart-tab" data-range="month">Month</button>
+        <button class="grid-chart-tab" data-range="year">Year</button>
+      </div>
+    </div>
+  </div>
   <div class="arc-inner">
     <svg id="sun-arc" viewBox="0 0 800 220" preserveAspectRatio="none">
       <rect width="800" height="220" fill="var(--arc-bg)"/>
@@ -67,6 +87,7 @@
       </div>
       <div class="chart-canvas-wrap">
         <canvas id="array-chart"></canvas>
+        <canvas id="array-crosshair" class="chart-crosshair"></canvas>
         <div class="chart-tooltip" id="chart-tooltip"></div>
       </div>
     </div>
@@ -88,6 +109,12 @@
       <a class="modal-link" href="https://github.com/smcneece/solar-sentinel/blob/main/README.md" target="_blank">README / Documentation</a>
       <a class="modal-link" href="https://github.com/smcneece/solar-sentinel/blob/main/CHANGELOG.md" target="_blank">Changelog</a>
       <a class="modal-link" href="https://github.com/smcneece/solar-sentinel/issues/new/choose" target="_blank">Report an Issue / Request a Feature</a>
+      <a class="modal-link" href="https://github.com/sponsors/smcneece" target="_blank" style="color:#db61a2">&#9829; Sponsor this project</a>
+    </div>
+    <div style="margin-top:0.75rem;border-top:1px solid var(--border);padding-top:0.75rem">
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">If asked to help diagnose a feature issue, click below and paste the result into the GitHub issue.</div>
+      <button class="modal-btn" id="about-debug-btn">Copy Debug Info</button>
+      <span id="about-debug-status" style="font-size:0.75rem;color:var(--text-muted);margin-left:0.5rem"></span>
     </div>
   </div>
 </div>
@@ -105,6 +132,10 @@
       <label for="setting-min-avg-w">Minimum array average (W) to show live power (0 = disabled)</label>
       <input type="number" class="settings-input" id="setting-min-avg-w" min="0" max="100" value="5"
              title="When the array average is below this value, all panel wattage is shown as 0 W. Useful for integrations that cache the last reading overnight. Set to 0 to always show the raw value.">
+    </div>
+    <div class="settings-row">
+      <label for="setting-show-grid">Show grid import/export chart (if sensors available)</label>
+      <input type="checkbox" id="setting-show-grid" checked>
     </div>
     <div class="modal-actions">
       <button class="modal-btn modal-btn-primary" id="settings-save-btn">Save</button>
@@ -176,7 +207,7 @@
   </div>
 </div>
 
-<script>const BASE = '{{BASE}}';</script>
-<script src="{{BASE}}/app.js"></script>
+<script>window.BASE = '{{BASE}}';</script>
+<script type="module" src="{{BASE}}/app.js"></script>
 </body>
 </html>

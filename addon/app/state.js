@@ -1,0 +1,31 @@
+export const FINE_W = 4;
+export const FINE_H = 3;
+
+export const st = {
+  panels: [],
+  sunData: null,
+  historyCache: {},
+  sliderActive: false,
+  selectedDate: null,
+  chartRange: 'today',
+  lastChartPoints: [],
+  gridChartRange: 'today',
+  lastGridPoints: [],
+  gridHasExport: false,
+  showGridChart: true,
+  gridAvailable: false,
+  refreshTimer: null,
+  refreshInterval: 30000,
+  panelTarget: null,
+  panelChartRange: '30d',
+  gridLayout: null,
+  editMode: false,
+  editPositions: {},
+  editRotations: {},
+  editRows: 12,
+  editCols: 64,
+  dragEntityId: null,
+  dragLabelId: null,
+  editLabels: [],
+  bankDefaultRotation: 0,
+};

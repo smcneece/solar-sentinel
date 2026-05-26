@@ -269,6 +269,148 @@ async def discover_solar_inverters() -> list:
     return sorted(result, key=lambda x: x["name"])
 
 
+# ── Grid entity discovery ────────────────────────────────────────────────
+
+async def discover_grid_entities() -> dict:
+    """Discover grid import/export energy entities from the Energy Dashboard.
+
+    Returns {"import_id": str|None, "import_unit": str,
+             "export_id": str|None,  "export_unit": str}"""
+    energy_config = await get_energy_config()
+    result = {"import_id": None, "import_unit": "kWh",
+              "export_id": None,  "export_unit": "kWh"}
+
+    sources = energy_config.get("energy_sources", [])
+    for src in sources:
+        if src.get("type") != "grid":
+            continue
+        # Newer HA: nested flow_from/flow_to arrays
+        flow_from = src.get("flow_from", [])
+        flow_to   = src.get("flow_to",   [])
+        if flow_from and not result["import_id"]:
+            result["import_id"] = flow_from[0].get("stat_energy_from")
+        if flow_to and not result["export_id"]:
+            result["export_id"] = flow_to[0].get("stat_energy_to")
+        # Older HA / flat format: stat_energy_from/stat_energy_to directly on source
+        if not result["import_id"]:
+            result["import_id"] = src.get("stat_energy_from")
+        if not result["export_id"]:
+            result["export_id"] = src.get("stat_energy_to")
+
+    # Confirm units via entity states
+    check_ids = [x for x in (result["import_id"], result["export_id"]) if x]
+    if check_ids:
+        states = await get_entity_states_batch(check_ids)
+        for key, eid in (("import_unit", result["import_id"]),
+                         ("export_unit", result["export_id"])):
+            if eid and eid in states:
+                unit = states[eid].get("attributes", {}).get("unit_of_measurement", "kWh")
+                result[key] = unit if unit in ("Wh", "kWh") else "kWh"
+
+    _LOGGER.info("Grid entities: import=%s (%s), export=%s (%s)",
+                 result["import_id"], result["import_unit"],
+                 result["export_id"], result["export_unit"])
+    return result
+
+
+# ── Grid import/export chart statistics ──────────────────────────────────
+
+async def get_grid_stats_chart(import_id, import_unit: str,
+                               export_id, export_unit: str,
+                               solar_energy_ids: list, solar_wh_eids: set,
+                               start_utc: datetime.datetime,
+                               end_utc: datetime.datetime,
+                               period: str) -> list:
+    """Fetch grid import/export and solar energy statistics for the grid chart.
+
+    Returns list of {ts_ms, import_kwh, export_kwh, solar_kwh, consumed_solar_kwh}."""
+    stat_ids = [x for x in (import_id, export_id) if x] + list(solar_energy_ids)
+    if not stat_ids:
+        return []
+
+    token = _token()
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.ws_connect(
+                _HA_WS_URL, timeout=aiohttp.ClientTimeout(total=30)
+            ) as ws:
+                msg = await asyncio.wait_for(ws.receive_json(), timeout=5)
+                if msg.get("type") != "auth_required":
+                    return []
+                await ws.send_json({"type": "auth", "access_token": token})
+                msg = await asyncio.wait_for(ws.receive_json(), timeout=5)
+                if msg.get("type") != "auth_ok":
+                    return []
+                await ws.send_json({
+                    "id": 1,
+                    "type": "recorder/statistics_during_period",
+                    "start_time": start_utc.isoformat(),
+                    "end_time": end_utc.isoformat(),
+                    "statistic_ids": stat_ids,
+                    "period": period,
+                    "types": ["change"],
+                })
+                msg = await asyncio.wait_for(ws.receive_json(), timeout=30)
+                if not msg.get("success"):
+                    _LOGGER.warning("Grid chart stats failed: %s", msg.get("error"))
+                    return []
+                data = msg.get("result", {})
+    except Exception:
+        _LOGGER.exception("Failed to fetch grid chart stats")
+        return []
+
+    def _ts_map(eid):
+        result = {}
+        for entry in data.get(eid, []):
+            ts = entry.get("start")
+            change = entry.get("change")
+            if ts is None or change is None:
+                continue
+            try:
+                if isinstance(ts, (int, float)):
+                    ts_ms = int(ts)
+                else:
+                    ts_ms = int(datetime.datetime.fromisoformat(
+                        ts.replace("Z", "+00:00")).timestamp() * 1000)
+                result[ts_ms] = float(change)
+            except Exception:
+                continue
+        return result
+
+    import_map = _ts_map(import_id) if import_id else {}
+    export_map = _ts_map(export_id) if export_id else {}
+    solar_maps = {eid: _ts_map(eid) for eid in solar_energy_ids}
+
+    # Unit normalisation to kWh
+    if import_unit == "Wh":
+        import_map = {ts: v / 1000 for ts, v in import_map.items()}
+    if export_unit == "Wh":
+        export_map = {ts: v / 1000 for ts, v in export_map.items()}
+    for eid in solar_wh_eids:
+        if eid in solar_maps:
+            solar_maps[eid] = {ts: v / 1000 for ts, v in solar_maps[eid].items()}
+
+    all_ts = set(import_map) | set(export_map)
+    for m in solar_maps.values():
+        all_ts |= set(m)
+
+    points = []
+    for ts_ms in sorted(all_ts):
+        import_kwh = max(0.0, import_map.get(ts_ms, 0.0))
+        export_kwh = max(0.0, export_map.get(ts_ms, 0.0))
+        solar_kwh  = max(0.0, sum(m.get(ts_ms, 0.0) for m in solar_maps.values()))
+        consumed   = max(0.0, solar_kwh - export_kwh)
+        points.append({
+            "ts_ms":               ts_ms,
+            "import_kwh":          round(import_kwh, 3),
+            "export_kwh":          round(export_kwh,  3),
+            "solar_kwh":           round(solar_kwh,   3),
+            "consumed_solar_kwh":  round(consumed,    3),
+        })
+
+    return points
+
+
 # ── Entity rename ────────────────────────────────────────────────────────
 
 async def rename_entity(entity_id: str, name) -> bool:
@@ -729,3 +871,76 @@ async def get_array_stats_chart(power_ids: list, kw_ids: set,
         points.append({"ts_ms": ts_ms, "kwh": kwh})
 
     return points
+
+
+# ── Battery / debug discovery ────────────────────────────────────────────
+
+async def get_debug_info() -> dict:
+    """Gather battery discovery debug info for issue reporting.
+
+    Returns the raw Energy Dashboard config, all battery-type energy sources,
+    every entity that shares a device with a battery stat entity, and current
+    states for those entities. Universal: works with any integration."""
+    result = {
+        "energy_config_raw": {},
+        "battery_sources": [],
+        "battery_device_entity_ids": [],
+        "battery_device_entity_states": {},
+        "note": "Paste this JSON into a GitHub issue to help with battery feature development.",
+    }
+
+    try:
+        energy_config = await get_energy_config()
+        result["energy_config_raw"] = energy_config
+
+        sources = energy_config.get("energy_sources", [])
+        battery_sources = [s for s in sources if s.get("type") == "battery"]
+        result["battery_sources"] = battery_sources
+
+        if not battery_sources:
+            result["note"] += " No battery sources found in the HA Energy Dashboard."
+            return result
+
+        # Collect the stat entity IDs named in the energy config
+        stat_eids = set()
+        for src in battery_sources:
+            if src.get("stat_energy_to"):
+                stat_eids.add(src["stat_energy_to"])
+            if src.get("stat_energy_from"):
+                stat_eids.add(src["stat_energy_from"])
+
+        # Find the device_ids these stat entities belong to
+        registry = await get_entity_registry()
+        stat_devices = set()
+        for entry in registry:
+            if entry.get("entity_id") in stat_eids and entry.get("device_id"):
+                stat_devices.add(entry["device_id"])
+
+        # Collect all entity_ids on those devices
+        device_entity_ids = [
+            entry["entity_id"]
+            for entry in registry
+            if entry.get("device_id") in stat_devices
+        ]
+        result["battery_device_entity_ids"] = sorted(device_entity_ids)
+
+        # Fetch current states for all of them
+        all_eids = sorted(stat_eids | set(device_entity_ids))
+        states = await get_entity_states_batch(all_eids)
+        result["battery_device_entity_states"] = {
+            eid: {
+                "state": s.get("state"),
+                "attributes": {
+                    k: v for k, v in s.get("attributes", {}).items()
+                    if k in ("unit_of_measurement", "device_class", "state_class",
+                             "friendly_name", "last_updated")
+                },
+            }
+            for eid, s in states.items()
+        }
+
+    except Exception:
+        _LOGGER.exception("get_debug_info failed")
+        result["error"] = "Exception during debug info gathering; check addon logs."
+
+    return result

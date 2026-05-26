@@ -1,6 +1,18 @@
 # Changelog
 
+⭐ If Solar Sentinel is useful to you, consider starring the repo on GitHub so other HA users can find it. It takes two seconds and makes a real difference.
+[Star Solar Sentinel on GitHub](https://github.com/smcneece/solar-sentinel)
+
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
+
+## v2026.05.4 - May 25, 2026
+
+- Added grid import/export chart: a new panel to the left of the sun arc shows grid energy import and export as a stacked bar chart with Today/Week/Month/Year views and a total kWh label; requires grid sensors configured in the HA Energy Dashboard; can be toggled on or off in Settings
+- Added hover crosshair and tooltip to the production chart: mousing over a bar shows a vertical crosshair line and a tooltip with the time period and kWh value
+- Chart bars now use rounded top corners to match HA Energy Dashboard style
+- Moon phase icon terminator shape corrected: was appearing egg-shaped due to a too-flat ellipse; now renders with a more realistic curve and is clipped to the moon disc so the lit area cannot extend outside the circle
+- Fixed grid chart not updating when the date picker is changed to a past date; now refreshes alongside the production chart
+- Added Copy Debug Info button in Help/About: copies a JSON snapshot of the Energy Dashboard config and associated entity states to the clipboard; intended for issue reporting
 
 ## v2026.05.3 - May 24, 2026
 

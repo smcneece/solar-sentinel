@@ -62,10 +62,17 @@ Should work with any solar integration already configured in the Energy Dashboar
 - Layout is saved and persists across restarts
 - Export and import layout: download your panel positions, rotations, labels, and custom names as a JSON file; import it on another HA instance to replicate the layout without placing panels manually
 
+### Grid Import/Export Chart
+- Bar chart panel to the left of the sun arc showing grid energy import and export; only appears when grid sensors are configured in the HA Energy Dashboard
+- Four views: Today (hourly bars), Week, Month, Year; total kWh shown in the header
+- Import bars (blue) grow upward; export bars (purple) grow downward from a centered zero line; solar energy that offset import during the same hour is shown stacked in orange
+- Can be toggled on or off in Settings; hidden automatically when no grid sensors are present
+
 ### Production Chart
 - Array-level production bar chart displayed alongside the sun arc
 - Four views: Today (hourly bars, updates with each refresh), Week (last 5 Sun-Sat calendar weeks), Month (current month plus previous 11), Year (all available years)
 - Total kWh for the selected range shown in the header
+- Hover over a bar to see a crosshair and tooltip with the time period and kWh value
 - Stale overnight sensor readings are suppressed using the same threshold as the panel grid
 
 ### Sun Arc
@@ -84,7 +91,7 @@ Should work with any solar integration already configured in the Energy Dashboar
 - HA's default recorder retention is 10 days; see [History retention](#history-retention) below to extend it
 
 ### Configuration and Display
-- Help / About modal: shows app version, HA version, install mode, inverters found, and HA timezone; quick links to documentation, changelog, and issue tracker
+- Help / About modal: shows app version, HA version, install mode, inverters found, and HA timezone; quick links to documentation, changelog, and issue tracker; Copy Debug Info button copies a JSON snapshot of your Energy Dashboard config and entity states for issue reporting
 - Settings modal: configurable refresh interval; Re-discover button to force a fresh inverter scan without restarting the add-on; Export and Import Layout buttons for transferring panel layouts between HA instances
 - Light and dark theme support; follows HA or system preference automatically
 - Docker environment support via environment variables (HA_BASE_URL + HA_TOKEN)
@@ -183,6 +190,7 @@ All configuration is done within the add-on UI via the Settings modal (the gear 
 |---------|---------|-------------|
 | Refresh interval | 5 min | How often Solar Sentinel polls HA for current panel states (minimum 30 seconds). Set this to match your integration's polling frequency. For SunPower and other integrations limited by inverter firmware, the hardware typically updates every 5 minutes, so polling more frequently returns the same data. Integrations that support faster sensor updates can use a lower value. |
 | Minimum array average | 5 W | When the array-wide average wattage is below this value, all panel wattage is displayed as 0 W. Prevents stale cached readings from appearing as real production (common with integrations that hold the last known value overnight). Set to 0 to always show the raw value from HA. |
+| Show grid chart | on | Shows the grid import/export chart to the left of the sun arc when grid sensors are configured in the HA Energy Dashboard. Uncheck to hide the panel even when sensors are available. |
 | Re-discover | button | Forces a fresh inverter scan using the Energy Dashboard; clears the cached inverter list and re-runs discovery on the next refresh cycle |
 
 ### Optional: Moon Phase
@@ -273,7 +281,7 @@ Pull requests are welcome. A few things to keep in mind before opening one:
 
 **Solar integrations:** SunPower, ha-esunpower, Enphase, Fronius, SolarEdge, solar micro-inverter, solar panel monitoring  
 **Software:** Home Assistant, Home Assistant add-on, Supervisor, Home Assistant OS, Home Assistant Supervised, ingress UI  
-**Features:** Solar panel dashboard, per-panel power, solar array health, solar energy today, time slider, sun arc, moon phase, panel rename, color-coded grid, Energy Dashboard
+**Features:** Solar panel dashboard, per-panel power, solar array health, solar energy today, grid import export chart, time slider, sun arc, moon phase, panel rename, color-coded grid, Energy Dashboard
 
 <!-- 
 SEO Keywords: home assistant solar monitor, home assistant solar panel dashboard, solar sentinel,

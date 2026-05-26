@@ -22,11 +22,12 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "2026.05.3"
+VERSION = "2026.05.4"
 
 _inverters: list = []        # discovered inverter descriptors
 _panels_cache: list = []     # latest computed panel states
 _ha_tz: str = ""             # HA timezone string
+_grid_entities: dict = {}    # {"import_id", "import_unit", "export_id", "export_unit"}
 
 
 # ── Color coding ─────────────────────────────────────────────────────────
@@ -49,7 +50,7 @@ def _compute_color(power_w: float, avg_w: float, status: str) -> str:
 # ── Refresh loop ─────────────────────────────────────────────────────────
 
 async def do_refresh():
-    global _panels_cache, _ha_tz, _inverters
+    global _panels_cache, _ha_tz, _inverters, _grid_entities
 
     if not _ha_tz:
         _ha_tz = await ha_api.get_ha_timezone()
@@ -62,6 +63,10 @@ async def do_refresh():
             _LOGGER.warning("No solar inverters discovered. Is the Energy Dashboard configured?")
             _panels_cache = []
             return
+
+    if not _grid_entities:
+        _LOGGER.info("Running grid entity discovery...")
+        _grid_entities = await ha_api.discover_grid_entities()
 
     power_ids = [inv["entity_id"] for inv in _inverters]
     states = await ha_api.get_entity_states_batch(power_ids)
@@ -152,6 +157,30 @@ async def handle_app_js(request):
     return web.FileResponse("/app/app.js")
 
 
+async def handle_state_js(request):
+    return web.FileResponse("/app/state.js")
+
+
+async def handle_utils_js(request):
+    return web.FileResponse("/app/utils.js")
+
+
+async def handle_arc_js(request):
+    return web.FileResponse("/app/arc.js")
+
+
+async def handle_charts_js(request):
+    return web.FileResponse("/app/charts.js")
+
+
+async def handle_panels_js(request):
+    return web.FileResponse("/app/panels.js")
+
+
+async def handle_layout_js(request):
+    return web.FileResponse("/app/layout.js")
+
+
 async def handle_api_panels(request):
     online = [p for p in _panels_cache if p["status"] == "online"]
     avg_w = sum(p["power_w"] for p in online) / len(online) if online else 0.0
@@ -162,6 +191,8 @@ async def handle_api_panels(request):
         "avg_w": round(avg_w, 1),
         "count": len(_inverters),
         "timestamp": int(datetime.datetime.now().timestamp()),
+        "grid_available": bool(_grid_entities.get("import_id") or _grid_entities.get("export_id")),
+        "has_export": bool(_grid_entities.get("export_id")),
     }
     return web.Response(text=json.dumps(payload), content_type="application/json")
 
@@ -287,9 +318,10 @@ async def handle_api_rename(request):
 
 
 async def handle_api_rediscover(request):
-    global _inverters
+    global _inverters, _grid_entities
     _LOGGER.info("Manual re-discovery triggered")
     _inverters = []
+    _grid_entities = {}
     asyncio.ensure_future(do_refresh())
     return web.Response(text='{"status":"ok"}', content_type="application/json")
 
@@ -553,6 +585,147 @@ async def handle_api_array_chart(request):
     )
 
 
+def _grid_point_zero():
+    return {"import_kwh": 0.0, "export_kwh": 0.0, "solar_kwh": 0.0, "consumed_solar_kwh": 0.0}
+
+
+async def handle_api_grid_chart(request):
+    range_str = request.rel_url.query.get("range", "today")
+    date_str  = request.rel_url.query.get("date", "")
+
+    import_id   = _grid_entities.get("import_id")
+    import_unit = _grid_entities.get("import_unit", "kWh")
+    export_id   = _grid_entities.get("export_id")
+    export_unit = _grid_entities.get("export_unit", "kWh")
+    has_export  = bool(export_id)
+
+    empty = web.Response(
+        text=json.dumps({"range": range_str, "has_export": has_export,
+                         "import_total": 0, "export_total": 0, "points": []}),
+        content_type="application/json",
+    )
+    if not import_id and not export_id:
+        return empty
+
+    solar_energy_ids = [inv["energy_entity_id"] for inv in _inverters
+                        if inv.get("energy_entity_id")]
+    solar_wh_eids = {inv["energy_entity_id"] for inv in _inverters
+                     if inv.get("energy_entity_id") and inv.get("energy_unit") == "Wh"}
+
+    try:
+        tz = zoneinfo.ZoneInfo(_ha_tz) if _ha_tz else datetime.timezone.utc
+    except Exception:
+        tz = datetime.timezone.utc
+
+    now = datetime.datetime.now(tz)
+
+    if range_str == "today":
+        if date_str:
+            try:
+                d = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+                local_day = d.replace(tzinfo=tz)
+            except Exception:
+                local_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        else:
+            local_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_utc = local_day.astimezone(datetime.timezone.utc)
+        end_utc   = (local_day + datetime.timedelta(days=1)).astimezone(datetime.timezone.utc)
+        period    = "hour"
+    elif range_str == "week":
+        days_since_sunday = (now.weekday() + 1) % 7
+        this_sunday = (now - datetime.timedelta(days=days_since_sunday)).replace(
+            hour=0, minute=0, second=0, microsecond=0)
+        start_utc = (this_sunday - datetime.timedelta(weeks=4)).astimezone(datetime.timezone.utc)
+        end_utc   = now.astimezone(datetime.timezone.utc)
+        period    = "day"
+        local_day = None
+    elif range_str == "month":
+        m, y = now.month - 11, now.year
+        while m <= 0:
+            m += 12; y -= 1
+        start_utc = datetime.datetime(y, m, 1, tzinfo=tz).astimezone(datetime.timezone.utc)
+        end_utc   = now.astimezone(datetime.timezone.utc)
+        period    = "month"
+        local_day = None
+    else:  # year
+        start_utc = datetime.datetime(max(now.year - 10, 2015), 1, 1, tzinfo=tz).astimezone(
+            datetime.timezone.utc)
+        end_utc   = now.astimezone(datetime.timezone.utc)
+        period    = "month"
+        local_day = None
+
+    raw = await ha_api.get_grid_stats_chart(
+        import_id, import_unit, export_id, export_unit,
+        solar_energy_ids, solar_wh_eids,
+        start_utc, end_utc, period,
+    )
+
+    points = []
+    if range_str == "today":
+        by_hour = {}
+        for pt in raw:
+            dt = datetime.datetime.fromtimestamp(pt["ts_ms"] / 1000, tz=tz)
+            by_hour[dt.hour] = pt
+        max_hour = now.hour if local_day.date() == now.date() else 23
+        for h in range(max_hour + 1):
+            label = f"{h % 12 or 12}{'a' if h < 12 else 'p'}"
+            ts_ms = int(local_day.replace(hour=h).timestamp() * 1000)
+            p = dict(by_hour.get(h, _grid_point_zero()))
+            p["label"] = label; p["ts_ms"] = ts_ms
+            points.append(p)
+
+    elif range_str == "week":
+        by_week: dict = {}
+        for pt in raw:
+            dt = datetime.datetime.fromtimestamp(pt["ts_ms"] / 1000, tz=tz)
+            d_off = (dt.weekday() + 1) % 7
+            wk = int((dt - datetime.timedelta(days=d_off)).replace(
+                hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
+            acc = by_week.setdefault(wk, _grid_point_zero())
+            for k in acc:
+                acc[k] = round(acc[k] + pt.get(k, 0.0), 3)
+        for wk in sorted(by_week)[-5:]:
+            dt = datetime.datetime.fromtimestamp(wk / 1000, tz=tz)
+            p = dict(by_week[wk]); p["label"] = f"{dt.month}/{dt.day}"; p["ts_ms"] = wk
+            points.append(p)
+
+    elif range_str == "month":
+        by_month: dict = {}
+        for pt in raw:
+            dt = datetime.datetime.fromtimestamp(pt["ts_ms"] / 1000, tz=tz)
+            key = (dt.year, dt.month)
+            acc = by_month.setdefault(key, _grid_point_zero())
+            for k in acc:
+                acc[k] = round(acc[k] + pt.get(k, 0.0), 3)
+        for (yr, mo) in sorted(by_month)[-12:]:
+            ts_ms = int(datetime.datetime(yr, mo, 1, tzinfo=tz).timestamp() * 1000)
+            p = dict(by_month[(yr, mo)]); p["label"] = _MONTH_ABBR[mo]; p["ts_ms"] = ts_ms
+            points.append(p)
+
+    else:  # year
+        by_year: dict = {}
+        for pt in raw:
+            dt = datetime.datetime.fromtimestamp(pt["ts_ms"] / 1000, tz=tz)
+            acc = by_year.setdefault(dt.year, _grid_point_zero())
+            for k in acc:
+                acc[k] = round(acc[k] + pt.get(k, 0.0), 3)
+        for yr in sorted(by_year):
+            ts_ms = int(datetime.datetime(yr, 1, 1, tzinfo=tz).timestamp() * 1000)
+            p = dict(by_year[yr]); p["label"] = str(yr); p["ts_ms"] = ts_ms
+            points.append(p)
+
+    return web.Response(
+        text=json.dumps({
+            "range": range_str,
+            "has_export": has_export,
+            "import_total": round(sum(p["import_kwh"] for p in points), 2),
+            "export_total": round(sum(p["export_kwh"] for p in points), 2),
+            "points": points,
+        }),
+        content_type="application/json",
+    )
+
+
 async def handle_api_about(request):
     ha_version = await ha_api.get_ha_version()
     mode = "Docker" if os.environ.get("HA_BASE_URL") else "Supervisor"
@@ -564,6 +737,20 @@ async def handle_api_about(request):
             "inverters_found": len(_inverters),
             "ha_tz": _ha_tz,
         }),
+        content_type="application/json",
+    )
+
+
+async def handle_api_debug(request):
+    """Battery/integration debug info for issue reporting. No sensitive data is included."""
+    mode = "Docker" if os.environ.get("HA_BASE_URL") else "Supervisor"
+    debug = await ha_api.get_debug_info()
+    debug["solar_sentinel_version"] = VERSION
+    debug["mode"] = mode
+    debug["inverters_discovered"] = len(_inverters)
+    debug["grid_entities"] = _grid_entities
+    return web.Response(
+        text=json.dumps(debug, indent=2),
         content_type="application/json",
     )
 
@@ -590,6 +777,12 @@ def main():
     app.router.add_get("/icon.png",               handle_icon)
     app.router.add_get("/app.css",                handle_app_css)
     app.router.add_get("/app.js",                 handle_app_js)
+    app.router.add_get("/state.js",               handle_state_js)
+    app.router.add_get("/utils.js",               handle_utils_js)
+    app.router.add_get("/arc.js",                 handle_arc_js)
+    app.router.add_get("/charts.js",              handle_charts_js)
+    app.router.add_get("/panels.js",              handle_panels_js)
+    app.router.add_get("/layout.js",              handle_layout_js)
     app.router.add_get("/api/panels",             handle_api_panels)
     app.router.add_get("/api/sun",                handle_api_sun)
     app.router.add_get("/api/history",            handle_api_history)
@@ -600,11 +793,13 @@ def main():
     app.router.add_post("/api/rename",             handle_api_rename)
     app.router.add_post("/api/rediscover",        handle_api_rediscover)
     app.router.add_get("/api/about",              handle_api_about)
+    app.router.add_get("/api/debug",              handle_api_debug)
     app.router.add_get("/api/grid",               handle_api_grid_get)
     app.router.add_post("/api/grid",              handle_api_grid_post)
     app.router.add_get("/api/panel_detail",       handle_api_panel_detail)
     app.router.add_get("/api/panel_chart",        handle_api_panel_chart)
     app.router.add_get("/api/array_chart",        handle_api_array_chart)
+    app.router.add_get("/api/grid_chart",         handle_api_grid_chart)
 
     port = int(os.environ.get("INGRESS_PORT", 8100))
     _LOGGER.info("Solar Sentinel v%s starting on port %d", VERSION, port)
