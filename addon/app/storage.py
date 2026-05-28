@@ -18,6 +18,8 @@ DEFAULT_SETTINGS = {
     "refresh_interval": 300,
     "min_avg_w": 5,
     "show_grid_chart": True,
+    "show_panel_names": True,
+    "name_strip": "",
 }
 
 
@@ -51,7 +53,7 @@ def get_settings() -> dict:
 def save_settings(updates: dict) -> dict:
     data = _load()
     current = {**DEFAULT_SETTINGS, **data.get("settings", {})}
-    allowed = {"refresh_interval", "min_avg_w", "show_grid_chart"}
+    allowed = {"refresh_interval", "min_avg_w", "show_grid_chart", "show_panel_names", "name_strip"}
     for key in allowed:
         if key in updates:
             current[key] = updates[key]

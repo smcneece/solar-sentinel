@@ -1,7 +1,7 @@
 import { st, FINE_W, FINE_H } from './state.js';
 import { fmtW, todayStr, currentMinutes, sliderToTimestamp, applyHistoryToPanels, recolorPanels } from './utils.js';
 import { renderSunArc } from './arc.js';
-import { applyGridVisibility, fetchArrayChart, fetchGridChart, drawArrayChart, drawGridChart, initChartTooltip, initGridChartTooltip } from './charts.js';
+import { applyLeftPanelVisibility, fetchArrayChart, fetchGridChart, fetchBatteryChart, drawArrayChart, drawGridChart, drawBatterySocChart, drawBatteryKwhChart, initChartTooltip, initGridChartTooltip, initBatteryChartTooltip } from './charts.js';
 import { renderPanels, openPanelModal, switchPanelTab, loadPanelChart, savePanelRename } from './panels.js';
 import { fetchGrid, enterEditMode, exitEditMode, renderEditMode } from './layout.js';
 
@@ -37,8 +37,9 @@ export async function fetchPanels() {
     const data = await resp.json();
     st.panels = data.panels || [];
     st.gridAvailable = data.grid_available || false;
+    st.batteryAvailable = data.battery_available || false;
     if (data.has_export !== undefined) st.gridHasExport = data.has_export;
-    applyGridVisibility();
+    applyLeftPanelVisibility();
     if (!st.sliderActive) {
       document.getElementById('total-power').textContent = data.total_w != null ? fmtW(data.total_w) : '-- W';
       const online = (data.panels || []).filter(p => p.status === 'online').length;
@@ -86,7 +87,10 @@ async function fetchSettings() {
     const s = await resp.json();
     st.refreshInterval = Math.max(10, (s.refresh_interval || 30)) * 1000;
     st.showGridChart = s.show_grid_chart !== false;
-    applyGridVisibility();
+    st.nameStrip = (s.name_strip || '').split(',').map(x => x.trim()).filter(Boolean);
+    st.showPanelNames = s.show_panel_names !== false;
+    st.minAvgW = s.min_avg_w ?? 5;
+    applyLeftPanelVisibility();
   } catch (e) { /* ignore */ }
 }
 
@@ -100,6 +104,10 @@ function scheduleRefresh() {
       updateSliderToNow();
       if (st.sunData) renderSunArc(st.sunData, null);
       if (st.chartRange === 'today') fetchArrayChart();
+      if (st.batteryAvailable) {
+        fetchBatteryStatus();
+        if (st.leftPanelTab === 'battery' && st.batteryChartRange === 'today') fetchBatteryChart();
+      }
     }
     scheduleRefresh();
   }, st.refreshInterval);
@@ -201,6 +209,7 @@ async function onDateChange(preserveSlider = false) {
   await onSliderInput();
   if (st.chartRange === 'today') fetchArrayChart();
   if (st.gridChartRange === 'today') fetchGridChart();
+  if (st.batteryAvailable && st.batteryChartRange === 'today') fetchBatteryChart();
 }
 
 // ── Settings modal ────────────────────────────────────────────────────────
@@ -228,6 +237,8 @@ async function openSettings() {
     document.getElementById('setting-interval').value = s.refresh_interval || 30;
     document.getElementById('setting-min-avg-w').value = s.min_avg_w ?? 5;
     document.getElementById('setting-show-grid').checked = s.show_grid_chart !== false;
+    document.getElementById('setting-show-panel-names').checked = s.show_panel_names !== false;
+    document.getElementById('setting-name-strip').value = s.name_strip || '';
   } catch (e) { console.error('openSettings:', e); }
 }
 
@@ -242,13 +253,81 @@ async function saveSettings() {
         refresh_interval: interval,
         min_avg_w: Math.max(0, parseInt(document.getElementById('setting-min-avg-w').value) || 0),
         show_grid_chart: showGrid,
+        show_panel_names: document.getElementById('setting-show-panel-names').checked,
+        name_strip: document.getElementById('setting-name-strip').value.trim(),
       }),
     });
     st.refreshInterval = Math.max(10, interval) * 1000;
     st.showGridChart = showGrid;
-    applyGridVisibility();
+    st.nameStrip = (document.getElementById('setting-name-strip').value.trim())
+      .split(',').map(x => x.trim()).filter(Boolean);
+    st.showPanelNames = document.getElementById('setting-show-panel-names').checked;
+    st.minAvgW = Math.max(0, parseInt(document.getElementById('setting-min-avg-w').value) || 0);
+    applyLeftPanelVisibility();
+    renderPanels(st.panels);
     closeModal('settings-modal');
   } catch (e) { console.error('saveSettings:', e); }
+}
+
+// ── Battery status ────────────────────────────────────────────────────────
+
+async function fetchBatteryStatus() {
+  if (!st.batteryAvailable) return;
+  try {
+    const resp = await fetch(`${window.BASE}/api/battery_status`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const batteries = data.batteries || [];
+    if (!batteries.length) return;
+    st.batteryStatus = batteries[0];
+    updateBatteryStatusDisplay(st.batteryStatus);
+  } catch (e) {
+    console.error('fetchBatteryStatus:', e);
+  }
+}
+
+function updateBatteryStatusDisplay(bat) {
+  if (!bat) return;
+
+  const nameEl = document.getElementById('battery-panel-title');
+  if (nameEl) nameEl.textContent = bat.name || 'Battery';
+
+  const socEl = document.getElementById('battery-soc-pct');
+  if (socEl) socEl.textContent = bat.soc_pct != null ? `${bat.soc_pct.toFixed(0)} %` : '-- %';
+
+  const powerEl = document.getElementById('battery-power-label');
+  if (powerEl) {
+    const dir = bat.direction || 'idle';
+    const w = bat.power_w || 0;
+    if (dir === 'charging')    powerEl.textContent = `↑ ${fmtW(w)} charging`;
+    else if (dir === 'discharging') powerEl.textContent = `↓ ${fmtW(w)} discharging`;
+    else powerEl.textContent = 'Idle';
+  }
+
+  const modeEl = document.getElementById('battery-mode-label');
+  if (modeEl) modeEl.textContent = bat.mode ? bat.mode.replace(/_/g, ' ') : '';
+
+  const todayEl = document.getElementById('battery-today-label');
+  if (todayEl) {
+    todayEl.textContent =
+      `${(bat.today_charged_kwh || 0).toFixed(1)} in / ${(bat.today_discharged_kwh || 0).toFixed(1)} out kWh`;
+  }
+}
+
+function switchLeftPanelTab(tab) {
+  st.leftPanelTab = tab;
+  const gridContent    = document.getElementById('left-grid-content');
+  const batteryContent = document.getElementById('left-battery-content');
+  const onGrid = tab === 'grid';
+  if (gridContent)    gridContent.style.display    = onGrid ? 'flex' : 'none';
+  if (batteryContent) batteryContent.style.display = onGrid ? 'none' : 'flex';
+  document.getElementById('left-tab-grid')?.classList.toggle('active', onGrid);
+  document.getElementById('left-tab-battery')?.classList.toggle('active', !onGrid);
+  if (!onGrid) {
+    if (st.batteryStatus) updateBatteryStatusDisplay(st.batteryStatus);
+    else fetchBatteryStatus();
+    fetchBatteryChart();
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
@@ -264,6 +343,7 @@ async function init() {
   await fetchGrid();
   await fetchPanels();
   await fetchSun();
+  if (st.batteryAvailable) await fetchBatteryStatus();
   updateSliderToNow();
 
   // Refresh panels on rename-clear event from panels.js
@@ -304,18 +384,17 @@ async function init() {
     try {
       const resp = await fetch(`${window.BASE}/api/debug`);
       const text = await resp.text();
-      // navigator.clipboard requires HTTPS; HA ingress is HTTP so use execCommand fallback
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      status.textContent = 'Copied to clipboard.';
+      const blob = new Blob([text], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'solar-sentinel-debug.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      status.textContent = 'Downloaded.';
     } catch (e) {
       status.textContent = 'Failed. Check browser console.';
-      console.error('debug copy failed:', e);
+      console.error('debug download failed:', e);
     }
     btn.disabled = false;
     setTimeout(() => { status.textContent = ''; }, 4000);
@@ -412,9 +491,27 @@ async function init() {
   });
   initGridChartTooltip();
 
+  document.getElementById('left-tab-grid')?.addEventListener('click', () => switchLeftPanelTab('grid'));
+  document.getElementById('left-tab-battery')?.addEventListener('click', () => switchLeftPanelTab('battery'));
+
+  document.querySelectorAll('.battery-chart-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.battery-chart-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      st.batteryChartRange = btn.dataset.range;
+      st.lastBatteryPoints = [];
+      fetchBatteryChart();
+    });
+  });
+  initBatteryChartTooltip();
+
   window.addEventListener('resize', () => {
     if (st.chartRange) drawArrayChart(st.lastChartPoints || [], st.chartRange);
     if (st.lastGridPoints.length) drawGridChart(st.lastGridPoints, st.gridHasExport);
+    if (st.lastBatteryPoints.length) {
+      if (st.batteryChartType === 'soc') drawBatterySocChart(st.lastBatteryPoints);
+      else drawBatteryKwhChart(st.lastBatteryPoints);
+    }
   });
 
   scheduleRefresh();

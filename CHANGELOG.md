@@ -5,6 +5,20 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.05.5 - May 27, 2026
+
+- Added battery panel: if a battery source is configured in the HA Energy Dashboard, a Battery tab appears in the left panel alongside Grid; shows current SoC %, charge/discharge direction with live power, operating mode, and today's kWh charged in/out; chart has four views: Today (SoC % line for the full 24-hour window), Week/Month/Year (charged vs. discharged kWh as grouped bars); if only battery is present with no grid sensors, it shows directly without tabs
+- Added "Strip from panel names" setting: enter a comma-separated list of words or phrases to strip from all panel display names; display only, nothing is renamed in HA; useful for integrations that prefix every panel name with the integration name or device type
+- Added "Show names on panels" toggle in Settings: hides panel name text on cards in the live view; names are always shown in the layout editor regardless of this setting so you can still identify panels while placing them
+- Settings toggles (Show grid chart, Show names on panels) converted from checkboxes to toggle sliders
+- After an HA restart, Solar Sentinel now retries automatically every 30 seconds for up to 5 minutes when all panels are unavailable, rather than waiting the full refresh interval; reduces the time panels show as offline after an integration reconnects
+- Fixed minimum array average (W) threshold not being applied when scrubbing through history with the time slider; panels near sunrise or sunset could show colored wattage values below the threshold instead of suppressing to gray and 0 W
+- Renamed "Copy Debug Info" to "Download Debug Info": now downloads a JSON file (solar-sentinel-debug.json) instead of copying to clipboard; easier to attach directly to a GitHub issue and works reliably on all browsers
+- Added version-based cache busting for CSS and JS assets; browser cache is cleared automatically on version updates without requiring a manual hard refresh
+- Added color legend bar between the panel grid and the arc: a narrow gradient strip showing LOW (gray) through pale yellow to dark orange (HIGH), centered above the arc card so users can read the panel color scale at a glance
+- Panel color gradient: replaced the three-state green/yellow/red system with a smooth warm gradient (pale yellow to dark orange); color reflects both relative performance within the array and absolute production level so panels at dawn or dusk appear pale regardless of relative rank, while panels at full daytime output show rich orange; shaded or underperforming panels appear noticeably lighter than their neighbors
+- Panel detail modal now shows historical sensor values when the time slider is at a past time: power, voltage, current, temperature, and other device sensors reflect the values at the selected timestamp instead of current live readings; a "Historical: HH:MM" label appears at the top of the details tab to indicate the data is not live
+
 ## v2026.05.4 - May 25, 2026
 
 - Added grid import/export chart: a new panel to the left of the sun arc shows grid energy import and export as a stacked bar chart with Today/Week/Month/Year views and a total kWh label; requires grid sensors configured in the HA Energy Dashboard; can be toggled on or off in Settings

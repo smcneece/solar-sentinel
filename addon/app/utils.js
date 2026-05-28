@@ -1,4 +1,15 @@
-import { FINE_W, FINE_H } from './state.js';
+import { st, FINE_W, FINE_H } from './state.js';
+
+export function stripName(name) {
+  if (!st.nameStrip || !st.nameStrip.length) return name;
+  let result = name;
+  for (const s of st.nameStrip) {
+    if (!s) continue;
+    const escaped = s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    result = result.replace(new RegExp(escaped, 'gi'), '').trim();
+  }
+  return result || name;
+}
 
 export function getSpan(eid, rotations) {
   return (rotations[eid] || 0) ? [FINE_H, FINE_W] : [FINE_W, FINE_H];
@@ -68,13 +79,25 @@ export function applyHistoryToPanels(panels, historyData, targetMs) {
   });
 }
 
+const _WARM_THRESHOLD = 150;
+
+function _gradientColor(t) {
+  t = Math.min(Math.max(t, 0), 1);
+  const hue = Math.round(55 - t * 33);
+  const sat = Math.round(70 + t * 30);
+  const lit = Math.round(82 - t * 34);
+  return `hsl(${hue},${sat}%,${lit}%)`;
+}
+
 export function recolorPanels(panels) {
   const online = panels.filter(p => p.status === 'online' && p.power_w > 0);
   const avg = online.length ? online.reduce((s, p) => s + p.power_w, 0) / online.length : 0;
+  if (avg < (st.minAvgW ?? 5)) {
+    return panels.map(p => ({...p, power_w: 0, color: 'gray'}));
+  }
+  const scale = Math.min(1.0, avg / _WARM_THRESHOLD);
   return panels.map(p => {
     if (p.status !== 'online' || avg <= 0) return {...p, color: 'gray'};
-    const r = p.power_w / avg;
-    const color = r >= 0.90 ? 'green' : r >= 0.70 ? 'yellow' : 'red';
-    return {...p, color};
+    return {...p, color: _gradientColor((p.power_w / avg) * scale)};
   });
 }

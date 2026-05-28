@@ -67,12 +67,37 @@ function _drawGridMessage(msg) {
   ctx.fillText(msg, W / 2, H / 2);
 }
 
-export function applyGridVisibility() {
-  const panel = document.getElementById('arc-grid-panel');
+export function applyLeftPanelVisibility() {
+  const panel = document.getElementById('arc-left-panel');
   if (!panel) return;
-  const show = st.showGridChart && st.gridAvailable;
-  panel.style.display = show ? 'flex' : 'none';
-  if (show && !st.lastGridPoints.length) fetchGridChart();
+
+  const showGrid = st.showGridChart && st.gridAvailable;
+  const showBattery = st.batteryAvailable;
+  const showPanel = showGrid || showBattery;
+  panel.style.display = showPanel ? 'flex' : 'none';
+
+  const tabs = document.getElementById('left-type-tabs');
+  const gridContent    = document.getElementById('left-grid-content');
+  const batteryContent = document.getElementById('left-battery-content');
+
+  if (tabs) tabs.style.display = (showGrid && showBattery) ? 'flex' : 'none';
+
+  if (!showPanel) return;
+
+  // Determine which tab should be active: if current tab is not available, switch
+  if (st.leftPanelTab === 'grid' && !showGrid) st.leftPanelTab = 'battery';
+  if (st.leftPanelTab === 'battery' && !showBattery) st.leftPanelTab = 'grid';
+
+  const onGrid = st.leftPanelTab === 'grid';
+  if (gridContent) gridContent.style.display = onGrid ? 'flex' : 'none';
+  if (batteryContent) batteryContent.style.display = onGrid ? 'none' : 'flex';
+
+  if (tabs) {
+    document.getElementById('left-tab-grid')?.classList.toggle('active', onGrid);
+    document.getElementById('left-tab-battery')?.classList.toggle('active', !onGrid);
+  }
+
+  if (onGrid && !st.lastGridPoints.length) fetchGridChart();
 }
 
 export async function fetchGridChart() {
@@ -360,6 +385,285 @@ export function drawArrayChart(points, range) {
   points.forEach((pt, i) => {
     if (i % every !== 0) return;
     ctx.fillText(pt.label, padL + i * slotW + slotW / 2, padT + chartH + 3);
+  });
+}
+
+function _drawBatteryMessage(msg) {
+  const canvas = document.getElementById('battery-chart');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  if (!W || !H) return;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-dim').trim();
+  ctx.font = '11px system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(msg, W / 2, H / 2);
+}
+
+export async function fetchBatteryChart() {
+  const range = st.batteryChartRange;
+  let url = `${window.BASE}/api/battery_chart?range=${range}`;
+  if (range === 'today') {
+    const dateVal = document.getElementById('date-picker').value;
+    if (dateVal) url += `&date=${dateVal}`;
+  }
+  const loadingTimer = setTimeout(() => _drawBatteryMessage('Loading...'), 400);
+  try {
+    const resp = await fetch(url);
+    clearTimeout(loadingTimer);
+    if (!resp.ok) { _drawBatteryMessage('Error'); return; }
+    const data = await resp.json();
+    st.lastBatteryPoints = data.points || [];
+    st.batteryChartType  = data.type || 'soc';
+    if (data.type === 'soc') {
+      drawBatterySocChart(st.lastBatteryPoints);
+    } else {
+      drawBatteryKwhChart(st.lastBatteryPoints);
+    }
+  } catch (e) {
+    clearTimeout(loadingTimer);
+    console.error('fetchBatteryChart:', e);
+    _drawBatteryMessage('Error loading data');
+  }
+}
+
+export function drawBatterySocChart(points) {
+  const canvas = document.getElementById('battery-chart');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  if (!W || !H) return;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const style = getComputedStyle(document.documentElement);
+  const dimColor    = style.getPropertyValue('--text-dim').trim();
+  const mutedColor  = style.getPropertyValue('--text-muted').trim();
+  const borderColor = style.getPropertyValue('--border').trim();
+
+  if (!points.length) {
+    ctx.fillStyle = dimColor;
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('No data', W / 2, H / 2);
+    return;
+  }
+
+  const padT = 4, padR = 2, padB = 18, padL = 2;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+
+  // Use midnight of the first point's date as day start
+  const d0 = new Date(points[0].ts_ms);
+  d0.setHours(0, 0, 0, 0);
+  const dayStartMs = d0.getTime();
+  const dayMs = 86400 * 1000;
+
+  const toX = ts => padL + ((ts - dayStartMs) / dayMs) * chartW;
+  const toY = soc => padT + (1 - Math.max(0, Math.min(100, soc)) / 100) * chartH;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Faint grid lines at 25/50/75%
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = 0.5;
+  [25, 50, 75].forEach(pct => {
+    const y = toY(pct);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+  });
+
+  // Area fill
+  ctx.beginPath();
+  ctx.moveTo(toX(points[0].ts_ms), padT + chartH);
+  points.forEach(p => ctx.lineTo(toX(p.ts_ms), toY(p.soc_pct)));
+  ctx.lineTo(toX(points[points.length - 1].ts_ms), padT + chartH);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(67,160,71,0.15)';
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const x = toX(p.ts_ms), y = toY(p.soc_pct);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#43a047';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([]);
+  ctx.stroke();
+
+  // X axis baseline
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(padL, padT + chartH); ctx.lineTo(W - padR, padT + chartH); ctx.stroke();
+
+  // X axis labels every 6 hours
+  ctx.fillStyle = mutedColor;
+  ctx.font = '9px system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  [0, 6, 12, 18].forEach(h => {
+    const x = padL + (h / 24) * chartW;
+    const label = h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h - 12}p`;
+    ctx.fillText(label, x, padT + chartH + 3);
+  });
+}
+
+export function drawBatteryKwhChart(points) {
+  const canvas = document.getElementById('battery-chart');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  if (!W || !H) return;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const style = getComputedStyle(document.documentElement);
+  const dimColor    = style.getPropertyValue('--text-dim').trim();
+  const mutedColor  = style.getPropertyValue('--text-muted').trim();
+  const borderColor = style.getPropertyValue('--border').trim();
+
+  const hasData = points.some(p => (p.charged_kwh || 0) + (p.discharged_kwh || 0) > 0);
+  if (!points.length || !hasData) {
+    ctx.fillStyle = dimColor;
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('No data', W / 2, H / 2);
+    return;
+  }
+
+  const padT = 4, padR = 2, padB = 18, padL = 2;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+  const n = points.length;
+  const slotW = chartW / n;
+  const barW  = Math.max(1.5, slotW * 0.72);
+  const half  = Math.max(1, (barW - 1) / 2);
+
+  const maxKwh = Math.max(...points.flatMap(p => [p.charged_kwh || 0, p.discharged_kwh || 0]), 0.001);
+  const barR   = Math.min(2, half / 2);
+
+  ctx.clearRect(0, 0, W, H);
+
+  points.forEach((pt, i) => {
+    const cx = padL + i * slotW + slotW / 2;
+    const cH = ((pt.charged_kwh || 0) / maxKwh) * chartH;
+    if (cH > 0) {
+      ctx.fillStyle = '#43a047';
+      ctx.beginPath();
+      ctx.roundRect(cx - half - 0.5, padT + chartH - cH, half, cH, [barR, barR, 0, 0]);
+      ctx.fill();
+    }
+    const dH = ((pt.discharged_kwh || 0) / maxKwh) * chartH;
+    if (dH > 0) {
+      ctx.fillStyle = '#d4882a';
+      ctx.beginPath();
+      ctx.roundRect(cx + 0.5, padT + chartH - dH, half, dH, [barR, barR, 0, 0]);
+      ctx.fill();
+    }
+  });
+
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(padL, padT + chartH); ctx.lineTo(W - padR, padT + chartH); ctx.stroke();
+
+  let every = 1;
+  if (n > 20) every = 6; else if (n > 12) every = 4;
+  else if (n > 8) every = 3; else if (n > 5) every = 2;
+  ctx.fillStyle = mutedColor;
+  ctx.font = `${Math.max(9, Math.min(11, Math.floor(slotW * 0.9)))}px system-ui`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  points.forEach((pt, i) => {
+    if (i % every !== 0) return;
+    ctx.fillText(pt.label, padL + i * slotW + slotW / 2, padT + chartH + 3);
+  });
+}
+
+export function initBatteryChartTooltip() {
+  const canvas    = document.getElementById('battery-chart');
+  const crosshair = document.getElementById('battery-crosshair');
+  const tooltip   = document.getElementById('battery-chart-tooltip');
+  if (!canvas || !tooltip) return;
+
+  const padL = 2, padR = 2, padB = 18, padT = 4;
+
+  canvas.addEventListener('mousemove', (e) => {
+    const points = st.lastBatteryPoints;
+    if (!points || !points.length) { tooltip.style.display = 'none'; if (crosshair) clearCrosshair(crosshair); return; }
+
+    const rect   = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const chartW = rect.width - padL - padR;
+    const chartH = rect.height - padT - padB;
+
+    if (mouseX < padL || mouseX > rect.width - padR) { tooltip.style.display = 'none'; if (crosshair) clearCrosshair(crosshair); return; }
+
+    let barCenterX, pt, html;
+
+    if (st.batteryChartType === 'soc') {
+      const d0 = new Date(points[0].ts_ms);
+      d0.setHours(0, 0, 0, 0);
+      const dayStartMs = d0.getTime();
+      const dayMs = 86400 * 1000;
+      const mouseTs = dayStartMs + ((mouseX - padL) / chartW) * dayMs;
+      let nearestIdx = 0, minDist = Infinity;
+      points.forEach((p, i) => {
+        const dist = Math.abs(p.ts_ms - mouseTs);
+        if (dist < minDist) { minDist = dist; nearestIdx = i; }
+      });
+      pt = points[nearestIdx];
+      barCenterX = padL + ((pt.ts_ms - dayStartMs) / dayMs) * chartW;
+      const d = new Date(pt.ts_ms);
+      const h = d.getHours(), m = d.getMinutes();
+      const header = `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+      html = `<div style="font-weight:600;margin-bottom:0.25rem">${header}</div>`;
+      html += `<div style="display:flex;align-items:center;gap:5px">
+        <div style="width:8px;height:8px;border-radius:50%;background:#43a047;flex-shrink:0"></div>
+        <span>SoC: ${(pt.soc_pct || 0).toFixed(1)}%</span></div>`;
+    } else {
+      const n = points.length;
+      const idx = Math.max(0, Math.min(n - 1, Math.floor((mouseX - padL) / (chartW / n))));
+      pt = points[idx];
+      barCenterX = padL + idx * (chartW / n) + (chartW / n) / 2;
+      const header = getTooltipTimeHeader(pt, st.batteryChartRange);
+      html = `<div style="font-weight:600;margin-bottom:0.25rem">${header}</div>`;
+      if ((pt.charged_kwh || 0) > 0)
+        html += `<div style="display:flex;align-items:center;gap:5px">
+          <div style="width:8px;height:8px;border-radius:50%;background:#43a047;flex-shrink:0"></div>
+          <span>Charged: ${(pt.charged_kwh || 0).toFixed(2)} kWh</span></div>`;
+      if ((pt.discharged_kwh || 0) > 0)
+        html += `<div style="display:flex;align-items:center;gap:5px">
+          <div style="width:8px;height:8px;border-radius:50%;background:#d4882a;flex-shrink:0"></div>
+          <span>Discharged: ${(pt.discharged_kwh || 0).toFixed(2)} kWh</span></div>`;
+    }
+
+    if (crosshair) drawCrosshair(crosshair, barCenterX, padT, chartH);
+    tooltip.innerHTML = html;
+    tooltip.style.display = 'block';
+
+    const wrap = canvas.parentElement, wrapRect = wrap.getBoundingClientRect();
+    let tx = e.clientX - wrapRect.left + 10;
+    let ty = e.clientY - wrapRect.top - 10;
+    if (tx + tooltip.offsetWidth > wrapRect.width - 4) tx = e.clientX - wrapRect.left - tooltip.offsetWidth - 10;
+    if (ty + tooltip.offsetHeight > wrapRect.height) ty = wrapRect.height - tooltip.offsetHeight - 4;
+    if (ty < 0) ty = 4;
+    tooltip.style.left = tx + 'px';
+    tooltip.style.top  = ty + 'px';
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    tooltip.style.display = 'none';
+    if (crosshair) clearCrosshair(crosshair);
   });
 }
 

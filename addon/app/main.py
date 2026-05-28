@@ -22,35 +22,44 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "2026.05.4"
+VERSION = "2026.05.5"
 
 _inverters: list = []        # discovered inverter descriptors
 _panels_cache: list = []     # latest computed panel states
 _ha_tz: str = ""             # HA timezone string
 _grid_entities: dict = {}    # {"import_id", "import_unit", "export_id", "export_unit"}
+_batteries: list = []        # discovered battery descriptors
+_battery_discovered: bool = False
+_fast_retry_count: int = 0   # consecutive all-unavailable refreshes; drives post-restart fast retry
 
 
 # ── Color coding ─────────────────────────────────────────────────────────
 
-_MIN_AVG_W = 5.0  # default; overridden by settings min_avg_w
+_MIN_AVG_W = 5.0       # default; overridden by settings min_avg_w
+_WARM_THRESHOLD = 150.0  # avg W at which colors reach full intensity
+
+def _gradient_color(t: float) -> str:
+    """t in 0..1: pale yellow at 0, dark orange at 1."""
+    t = min(max(t, 0.0), 1.0)
+    hue = round(55 - t * 33)
+    sat = round(70 + t * 30)
+    lit = round(82 - t * 34)
+    return f"hsl({hue},{sat}%,{lit}%)"
 
 def _compute_color(power_w: float, avg_w: float, status: str) -> str:
     if status != "online":
         return "gray"
     if avg_w < _MIN_AVG_W:
         return "gray"
-    ratio = round(power_w) / avg_w
-    if ratio >= 0.88:
-        return "green"
-    if ratio >= 0.70:
-        return "yellow"
-    return "red"
+    scale = min(1.0, avg_w / _WARM_THRESHOLD)
+    return _gradient_color((power_w / avg_w) * scale)
 
 
 # ── Refresh loop ─────────────────────────────────────────────────────────
 
-async def do_refresh():
-    global _panels_cache, _ha_tz, _inverters, _grid_entities
+async def do_refresh() -> bool:
+    """Returns True if all discovered panels are unavailable (signals fast retry to caller)."""
+    global _panels_cache, _ha_tz, _inverters, _grid_entities, _batteries, _battery_discovered
 
     if not _ha_tz:
         _ha_tz = await ha_api.get_ha_timezone()
@@ -67,6 +76,11 @@ async def do_refresh():
     if not _grid_entities:
         _LOGGER.info("Running grid entity discovery...")
         _grid_entities = await ha_api.discover_grid_entities()
+
+    if not _battery_discovered:
+        _LOGGER.info("Running battery discovery...")
+        _batteries = await ha_api.discover_battery_sources()
+        _battery_discovered = True
 
     power_ids = [inv["entity_id"] for inv in _inverters]
     states = await ha_api.get_entity_states_batch(power_ids)
@@ -121,20 +135,36 @@ async def do_refresh():
         p["color"] = _compute_color(p["power_w"], avg_w, p["status"])
 
     _panels_cache = panels
+    all_unavailable = bool(panels) and all(p["status"] == "unavailable" for p in panels)
     _LOGGER.info(
-        "Refreshed: %d panel(s), %.0f W total, %.0f W avg",
+        "Refreshed: %d panel(s), %.0f W total, %.0f W avg%s",
         len(panels), total_w, avg_w,
+        " [all unavailable]" if all_unavailable else "",
     )
+    return all_unavailable
 
+
+_MAX_FAST_RETRIES = 10  # up to 5 minutes of 30s retries before giving up and using normal interval
 
 async def refresh_loop():
+    global _fast_retry_count
     while True:
         try:
-            await do_refresh()
+            all_unavailable = await do_refresh()
         except Exception:
             _LOGGER.exception("Refresh failed")
+            all_unavailable = False
+
         settings = storage.get_settings()
         interval = max(30, int(settings.get("refresh_interval", 300)))
+
+        if all_unavailable and _fast_retry_count < _MAX_FAST_RETRIES:
+            _fast_retry_count += 1
+            interval = 30
+            _LOGGER.info("All panels unavailable; fast retry %d/%d in 30s", _fast_retry_count, _MAX_FAST_RETRIES)
+        else:
+            _fast_retry_count = 0
+
         await asyncio.sleep(interval)
 
 
@@ -193,6 +223,7 @@ async def handle_api_panels(request):
         "timestamp": int(datetime.datetime.now().timestamp()),
         "grid_available": bool(_grid_entities.get("import_id") or _grid_entities.get("export_id")),
         "has_export": bool(_grid_entities.get("export_id")),
+        "battery_available": bool(_batteries),
     }
     return web.Response(text=json.dumps(payload), content_type="application/json")
 
@@ -318,10 +349,12 @@ async def handle_api_rename(request):
 
 
 async def handle_api_rediscover(request):
-    global _inverters, _grid_entities
+    global _inverters, _grid_entities, _batteries, _battery_discovered
     _LOGGER.info("Manual re-discovery triggered")
     _inverters = []
     _grid_entities = {}
+    _batteries = []
+    _battery_discovered = False
     asyncio.ensure_future(do_refresh())
     return web.Response(text='{"status":"ok"}', content_type="application/json")
 
@@ -356,6 +389,7 @@ _DETAIL_ORDER = {"power": 0, "energy": 1, "temperature": 2, "voltage": 3,
 
 async def handle_api_panel_detail(request):
     entity_id = request.rel_url.query.get("entity_id", "").strip()
+    ts_param = request.rel_url.query.get("ts", "").strip()
     if not entity_id:
         return web.Response(status=400, text="Missing entity_id")
     inv = next((i for i in _inverters if i["entity_id"] == entity_id), None)
@@ -364,6 +398,25 @@ async def handle_api_panel_detail(request):
 
     device_eids = inv.get("device_entity_ids", [])
     states = await ha_api.get_entity_states_batch(device_eids)
+
+    historical_ts = None
+    if ts_param:
+        try:
+            ts_ms = int(ts_param)
+            target_dt = datetime.datetime.fromtimestamp(ts_ms / 1000, tz=datetime.timezone.utc)
+            historical_ts = ts_ms
+            detail_eids = [
+                eid for eid in device_eids
+                if "mppt" not in eid.lower()
+                and states.get(eid, {}).get("attributes", {}).get("device_class", "") in _DETAIL_CLASSES
+            ]
+            hist_vals = await ha_api.get_entity_states_at_time(detail_eids, target_dt)
+            for eid, val in hist_vals.items():
+                if eid in states:
+                    states[eid] = dict(states[eid])
+                    states[eid]["state"] = val
+        except (ValueError, TypeError):
+            pass
 
     sensors = []
     for eid in device_eids:
@@ -386,7 +439,7 @@ async def handle_api_panel_detail(request):
     sensors.sort(key=lambda s: (0 if s["group"] == "sensors" else 1,
                                 _DETAIL_ORDER.get(s["device_class"], 99)))
     return web.Response(
-        text=json.dumps({"entity_id": entity_id, "sensors": sensors}),
+        text=json.dumps({"entity_id": entity_id, "sensors": sensors, "historical_ts": historical_ts}),
         content_type="application/json",
     )
 
@@ -726,6 +779,217 @@ async def handle_api_grid_chart(request):
     )
 
 
+def _bat_zero():
+    return {"charged_kwh": 0.0, "discharged_kwh": 0.0}
+
+
+def _aggregate_battery_weekly(daily_points, tz):
+    by_week: dict = {}
+    for pt in daily_points:
+        dt = datetime.datetime.fromtimestamp(pt["ts_ms"] / 1000, tz=tz)
+        d_off = (dt.weekday() + 1) % 7
+        wk = int((dt - datetime.timedelta(days=d_off)).replace(
+            hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
+        acc = by_week.setdefault(wk, _bat_zero())
+        acc["charged_kwh"]    = round(acc["charged_kwh"]    + pt.get("charged_kwh", 0.0), 3)
+        acc["discharged_kwh"] = round(acc["discharged_kwh"] + pt.get("discharged_kwh", 0.0), 3)
+    result = []
+    for wk in sorted(by_week)[-5:]:
+        dt = datetime.datetime.fromtimestamp(wk / 1000, tz=tz)
+        p = dict(by_week[wk]); p["label"] = f"{dt.month}/{dt.day}"; p["ts_ms"] = wk
+        result.append(p)
+    return result
+
+
+def _aggregate_battery_monthly(daily_points, tz):
+    by_month: dict = {}
+    for pt in daily_points:
+        dt = datetime.datetime.fromtimestamp(pt["ts_ms"] / 1000, tz=tz)
+        key = (dt.year, dt.month)
+        acc = by_month.setdefault(key, _bat_zero())
+        acc["charged_kwh"]    = round(acc["charged_kwh"]    + pt.get("charged_kwh", 0.0), 3)
+        acc["discharged_kwh"] = round(acc["discharged_kwh"] + pt.get("discharged_kwh", 0.0), 3)
+    result = []
+    for (yr, mo) in sorted(by_month)[-12:]:
+        ts_ms = int(datetime.datetime(yr, mo, 1, tzinfo=tz).timestamp() * 1000)
+        p = dict(by_month[(yr, mo)]); p["label"] = _MONTH_ABBR[mo]; p["ts_ms"] = ts_ms
+        result.append(p)
+    return result
+
+
+def _aggregate_battery_yearly(daily_points, tz):
+    by_year: dict = {}
+    for pt in daily_points:
+        dt = datetime.datetime.fromtimestamp(pt["ts_ms"] / 1000, tz=tz)
+        acc = by_year.setdefault(dt.year, _bat_zero())
+        acc["charged_kwh"]    = round(acc["charged_kwh"]    + pt.get("charged_kwh", 0.0), 3)
+        acc["discharged_kwh"] = round(acc["discharged_kwh"] + pt.get("discharged_kwh", 0.0), 3)
+    result = []
+    for yr in sorted(by_year):
+        ts_ms = int(datetime.datetime(yr, 1, 1, tzinfo=tz).timestamp() * 1000)
+        p = dict(by_year[yr]); p["label"] = str(yr); p["ts_ms"] = ts_ms
+        result.append(p)
+    return result
+
+
+async def handle_api_battery_status(request):
+    if not _batteries:
+        return web.Response(
+            text=json.dumps({"batteries": []}),
+            content_type="application/json",
+        )
+
+    entity_ids = []
+    for bat in _batteries:
+        for key in ("power_entity_id", "soc_entity_id", "mode_entity_id"):
+            eid = bat.get(key)
+            if eid:
+                entity_ids.append(eid)
+
+    states = await ha_api.get_entity_states_batch(entity_ids)
+    today_kwh = await ha_api.get_battery_today_kwh(_batteries, _ha_tz)
+
+    result_list = []
+    for bat in _batteries:
+        power_w = 0.0
+        direction = "idle"
+        power_eid = bat.get("power_entity_id")
+        if power_eid and power_eid in states:
+            raw = states[power_eid].get("state", "unavailable")
+            if raw not in ("unavailable", "unknown"):
+                try:
+                    val = float(raw)
+                    if bat.get("power_unit") == "kW":
+                        val *= 1000
+                    if val > 10:
+                        direction = "charging"
+                        power_w = val
+                    elif val < -10:
+                        direction = "discharging"
+                        power_w = abs(val)
+                    else:
+                        direction = "idle"
+                        power_w = 0.0
+                except (ValueError, TypeError):
+                    pass
+
+        soc_pct = None
+        soc_eid = bat.get("soc_entity_id")
+        if soc_eid and soc_eid in states:
+            raw = states[soc_eid].get("state", "unavailable")
+            if raw not in ("unavailable", "unknown"):
+                try:
+                    soc_pct = round(float(raw), 1)
+                except (ValueError, TypeError):
+                    pass
+
+        mode = None
+        mode_eid = bat.get("mode_entity_id")
+        if mode_eid and mode_eid in states:
+            raw = states[mode_eid].get("state", "")
+            if raw and raw not in ("unavailable", "unknown"):
+                mode = raw
+
+        result_list.append({
+            "idx": bat["idx"],
+            "name": bat["name"],
+            "soc_pct": soc_pct,
+            "power_w": round(power_w, 0),
+            "direction": direction,
+            "today_charged_kwh": today_kwh.get(bat.get("charge_energy_id"), 0.0),
+            "today_discharged_kwh": today_kwh.get(bat.get("discharge_energy_id"), 0.0),
+            "mode": mode,
+        })
+
+    return web.Response(
+        text=json.dumps({"batteries": result_list}),
+        content_type="application/json",
+    )
+
+
+async def handle_api_battery_chart(request):
+    idx = int(request.rel_url.query.get("idx", "0"))
+    range_str = request.rel_url.query.get("range", "today")
+    date_str = request.rel_url.query.get("date", "")
+
+    bat = next((b for b in _batteries if b["idx"] == idx), None)
+    if not bat:
+        return web.Response(
+            text=json.dumps({"range": range_str, "type": "soc", "points": []}),
+            content_type="application/json",
+        )
+
+    try:
+        tz = zoneinfo.ZoneInfo(_ha_tz) if _ha_tz else datetime.timezone.utc
+    except Exception:
+        tz = datetime.timezone.utc
+
+    now = datetime.datetime.now(tz)
+
+    if range_str == "today":
+        if not date_str:
+            date_str = now.strftime("%Y-%m-%d")
+        soc_eid = bat.get("soc_entity_id")
+        if not soc_eid:
+            return web.Response(
+                text=json.dumps({"range": range_str, "type": "soc", "points": []}),
+                content_type="application/json",
+            )
+        points = await ha_api.get_battery_soc_history(soc_eid, date_str, _ha_tz)
+        return web.Response(
+            text=json.dumps({"range": range_str, "type": "soc", "points": points}),
+            content_type="application/json",
+        )
+
+    charge_id    = bat.get("charge_energy_id")
+    charge_unit  = bat.get("charge_unit", "kWh")
+    discharge_id = bat.get("discharge_energy_id")
+    discharge_unit = bat.get("discharge_unit", "kWh")
+
+    if range_str == "week":
+        days_since_sunday = (now.weekday() + 1) % 7
+        this_sunday = (now - datetime.timedelta(days=days_since_sunday)).replace(
+            hour=0, minute=0, second=0, microsecond=0)
+        start_utc = (this_sunday - datetime.timedelta(weeks=4)).astimezone(datetime.timezone.utc)
+        end_utc = now.astimezone(datetime.timezone.utc)
+        period = "day"
+    elif range_str == "month":
+        m, y = now.month - 11, now.year
+        while m <= 0:
+            m += 12; y -= 1
+        start_utc = datetime.datetime(y, m, 1, tzinfo=tz).astimezone(datetime.timezone.utc)
+        end_utc = now.astimezone(datetime.timezone.utc)
+        period = "month"
+    else:  # year
+        start_utc = datetime.datetime(max(now.year - 10, 2015), 1, 1, tzinfo=tz).astimezone(
+            datetime.timezone.utc)
+        end_utc = now.astimezone(datetime.timezone.utc)
+        period = "month"
+
+    raw = await ha_api.get_battery_stats_chart(
+        charge_id, charge_unit, discharge_id, discharge_unit,
+        start_utc, end_utc, period,
+    )
+
+    if range_str == "week":
+        points = _aggregate_battery_weekly(raw, tz)
+    elif range_str == "month":
+        points = _aggregate_battery_monthly(raw, tz)
+    else:
+        points = _aggregate_battery_yearly(raw, tz)
+
+    return web.Response(
+        text=json.dumps({
+            "range": range_str,
+            "type": "kwh",
+            "points": points,
+            "charged_total":    round(sum(p["charged_kwh"] for p in points), 2),
+            "discharged_total": round(sum(p["discharged_kwh"] for p in points), 2),
+        }),
+        content_type="application/json",
+    )
+
+
 async def handle_api_about(request):
     ha_version = await ha_api.get_ha_version()
     mode = "Docker" if os.environ.get("HA_BASE_URL") else "Supervisor"
@@ -800,6 +1064,8 @@ def main():
     app.router.add_get("/api/panel_chart",        handle_api_panel_chart)
     app.router.add_get("/api/array_chart",        handle_api_array_chart)
     app.router.add_get("/api/grid_chart",         handle_api_grid_chart)
+    app.router.add_get("/api/battery_status",     handle_api_battery_status)
+    app.router.add_get("/api/battery_chart",      handle_api_battery_chart)
 
     port = int(os.environ.get("INGRESS_PORT", 8100))
     _LOGGER.info("Solar Sentinel v%s starting on port %d", VERSION, port)

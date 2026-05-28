@@ -1,21 +1,32 @@
 import { st, FINE_W, FINE_H } from './state.js';
-import { fmtW, fmtWh, getSpan } from './utils.js';
+import { fmtW, fmtWh, getSpan, stripName } from './utils.js';
 
 export function makePanelCard(p, isDraggable) {
   const cell = document.createElement('div');
-  cell.className = 'panel-cell ' + (p.color || 'gray');
+  const isGradient = p.color && p.color !== 'gray';
+  cell.className = 'panel-cell ' + (isGradient ? 'gradient' : (p.color || 'gray'));
   cell.dataset.entityId = p.entity_id;
+  if (isGradient) {
+    cell.style.backgroundColor = p.color;
+    cell.style.borderColor = p.color.replace(
+      /hsl\((\d+),(\d+)%,(\d+)%\)/,
+      (_, h, s, l) => `hsl(${h},${s}%,${Math.max(0, parseInt(l) - 15)}%)`
+    );
+  }
 
-  const name = document.createElement('div');
-  name.className = 'panel-name';
-  name.title = p.name;
-  name.textContent = p.name;
+  const displayName = stripName(p.name);
+  cell.title = displayName;
 
   const power = document.createElement('div');
   power.className = 'panel-power';
   power.textContent = p.status === 'online' ? fmtW(p.power_w) : '--';
 
-  cell.appendChild(name);
+  if (isDraggable || st.showPanelNames) {
+    const name = document.createElement('div');
+    name.className = 'panel-name';
+    name.textContent = displayName;
+    cell.appendChild(name);
+  }
   cell.appendChild(power);
 
   if (p.status === 'online' && p.today_wh !== null && p.today_wh !== undefined) {
@@ -156,11 +167,33 @@ export function switchPanelTab(tab) {
 
 export async function loadPanelDetails(entityId) {
   const list = document.getElementById('panel-detail-list');
+  const tsEl = document.getElementById('panel-detail-ts');
   list.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;padding:0.4rem 0">Loading...</div>';
+
+  let url = `${window.BASE}/api/panel_detail?entity_id=${encodeURIComponent(entityId)}`;
+  if (st.sliderActive) {
+    const sliderVal = parseInt(document.getElementById('time-slider').value);
+    const dateStr = document.getElementById('date-picker').value;
+    if (dateStr) {
+      const [y, mo, d] = dateStr.split('-').map(Number);
+      const h = Math.floor(sliderVal / 60), m = sliderVal % 60;
+      url += `&ts=${new Date(y, mo - 1, d, h, m).getTime()}`;
+    }
+  }
+
   try {
-    const resp = await fetch(`${window.BASE}/api/panel_detail?entity_id=${encodeURIComponent(entityId)}`);
+    const resp = await fetch(url);
     if (!resp.ok) { list.innerHTML = '<div style="color:var(--text-muted);padding:0.4rem 0">Could not load details.</div>'; return; }
     const data = await resp.json();
+    if (tsEl) {
+      if (data.historical_ts) {
+        const d = new Date(data.historical_ts);
+        tsEl.textContent = `Historical: ${d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`;
+        tsEl.style.display = '';
+      } else {
+        tsEl.style.display = 'none';
+      }
+    }
     renderPanelDetails(data.sensors || []);
   } catch (e) {
     console.error('loadPanelDetails:', e);

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Solar Sentinel</title>
-<link rel="stylesheet" href="{{BASE}}/app.css">
+<link rel="stylesheet" href="{{BASE}}/app.css?v={{VERSION}}">
 </head>
 <body>
 
@@ -28,24 +28,65 @@
   </div>
 </div>
 
+<div class="color-legend">
+  <span class="legend-label legend-low">LOW</span>
+  <div class="legend-bar"></div>
+  <span class="legend-label legend-high">HIGH</span>
+</div>
+
 <div class="arc-section">
-  <!-- Grid import/export chart (left of sun arc) -->
-  <div class="arc-grid-panel" id="arc-grid-panel" style="display:none">
-    <div class="chart-panel-header">
-      <span class="chart-panel-title">Grid</span>
-      <span class="chart-total-kwh" id="grid-chart-total">-- kWh</span>
+  <!-- Left panel: Grid and/or Battery (left of sun arc) -->
+  <div class="arc-left-panel" id="arc-left-panel" style="display:none">
+    <!-- Type tabs: only shown when both grid and battery are available -->
+    <div class="left-type-tabs" id="left-type-tabs" style="display:none">
+      <button class="left-type-tab active" id="left-tab-grid">Grid</button>
+      <button class="left-type-tab" id="left-tab-battery">Battery</button>
     </div>
-    <div class="chart-panel-body grid-chart-body">
-      <div class="chart-canvas-wrap">
-        <canvas id="grid-chart"></canvas>
-        <canvas id="grid-crosshair" class="chart-crosshair"></canvas>
-        <div class="chart-tooltip" id="grid-chart-tooltip"></div>
+    <!-- Grid content -->
+    <div id="left-grid-content">
+      <div class="chart-panel-header">
+        <span class="chart-panel-title">Grid</span>
+        <span class="chart-total-kwh" id="grid-chart-total">-- kWh</span>
       </div>
-      <div class="chart-tabs-vert chart-tabs-right">
-        <button class="grid-chart-tab active" data-range="today">Today</button>
-        <button class="grid-chart-tab" data-range="week">Week</button>
-        <button class="grid-chart-tab" data-range="month">Month</button>
-        <button class="grid-chart-tab" data-range="year">Year</button>
+      <div class="chart-panel-body grid-chart-body">
+        <div class="chart-canvas-wrap">
+          <canvas id="grid-chart"></canvas>
+          <canvas id="grid-crosshair" class="chart-crosshair"></canvas>
+          <div class="chart-tooltip" id="grid-chart-tooltip"></div>
+        </div>
+        <div class="chart-tabs-vert chart-tabs-right">
+          <button class="grid-chart-tab active" data-range="today">Today</button>
+          <button class="grid-chart-tab" data-range="week">Week</button>
+          <button class="grid-chart-tab" data-range="month">Month</button>
+          <button class="grid-chart-tab" data-range="year">Year</button>
+        </div>
+      </div>
+    </div>
+    <!-- Battery content -->
+    <div id="left-battery-content" style="display:none">
+      <div class="chart-panel-header">
+        <span class="chart-panel-title" id="battery-panel-title">Battery</span>
+        <span class="chart-total-kwh" id="battery-soc-pct">-- %</span>
+      </div>
+      <div class="battery-status-row">
+        <span class="battery-stat-power" id="battery-power-label">--</span>
+        <span class="battery-stat-mode" id="battery-mode-label"></span>
+      </div>
+      <div class="battery-status-row" style="border-bottom:none">
+        <span class="battery-stat-today" id="battery-today-label">-- in / -- out kWh</span>
+      </div>
+      <div class="chart-panel-body grid-chart-body">
+        <div class="chart-canvas-wrap">
+          <canvas id="battery-chart"></canvas>
+          <canvas id="battery-crosshair" class="chart-crosshair"></canvas>
+          <div class="chart-tooltip" id="battery-chart-tooltip"></div>
+        </div>
+        <div class="chart-tabs-vert chart-tabs-right">
+          <button class="battery-chart-tab active" data-range="today">Today</button>
+          <button class="battery-chart-tab" data-range="week">Week</button>
+          <button class="battery-chart-tab" data-range="month">Month</button>
+          <button class="battery-chart-tab" data-range="year">Year</button>
+        </div>
       </div>
     </div>
   </div>
@@ -112,8 +153,8 @@
       <a class="modal-link" href="https://github.com/sponsors/smcneece" target="_blank" style="color:#db61a2">&#9829; Sponsor this project</a>
     </div>
     <div style="margin-top:0.75rem;border-top:1px solid var(--border);padding-top:0.75rem">
-      <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">If asked to help diagnose a feature issue, click below and paste the result into the GitHub issue.</div>
-      <button class="modal-btn" id="about-debug-btn">Copy Debug Info</button>
+      <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">If asked to help diagnose a feature issue, click below to download a JSON file and attach it to the GitHub issue.</div>
+      <button class="modal-btn" id="about-debug-btn">Download Debug Info</button>
       <span id="about-debug-status" style="font-size:0.75rem;color:var(--text-muted);margin-left:0.5rem"></span>
     </div>
   </div>
@@ -135,7 +176,21 @@
     </div>
     <div class="settings-row">
       <label for="setting-show-grid">Show grid import/export chart (if sensors available)</label>
-      <input type="checkbox" id="setting-show-grid" checked>
+      <label class="toggle-switch">
+        <input type="checkbox" id="setting-show-grid" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="settings-row">
+      <label for="setting-show-panel-names">Show panel names on panels</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="setting-show-panel-names" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="settings-row settings-row-block">
+      <label for="setting-name-strip">Strip from panel names, comma-separated (display only; does not rename in HA)</label>
+      <textarea class="settings-textarea" id="setting-name-strip" placeholder="e.g. SunPower Inverter, Enphase" rows="3"></textarea>
     </div>
     <div class="modal-actions">
       <button class="modal-btn modal-btn-primary" id="settings-save-btn">Save</button>
@@ -171,6 +226,7 @@
 
     <!-- Details tab -->
     <div id="panel-tab-details">
+      <div id="panel-detail-ts" style="display:none;font-size:0.8rem;color:var(--text-muted);padding:0.3rem 0 0.1rem;font-style:italic"></div>
       <div id="panel-detail-list" style="min-height:80px"></div>
       <div class="modal-actions">
         <button class="modal-btn modal-btn-primary" id="panel-save-btn">Save Name</button>
@@ -208,6 +264,6 @@
 </div>
 
 <script>window.BASE = '{{BASE}}';</script>
-<script type="module" src="{{BASE}}/app.js"></script>
+<script type="module" src="{{BASE}}/app.js?v={{VERSION}}"></script>
 </body>
 </html>

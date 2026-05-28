@@ -138,9 +138,9 @@
     justify-content: center;
   }
   .panel-cell:hover { transform: scale(1.02); }
-  .panel-cell.green  { background: var(--green-bg);  border-color: var(--green-border); }
-  .panel-cell.yellow { background: var(--yellow-bg); border-color: var(--yellow-border); }
-  .panel-cell.red    { background: var(--red-bg);    border-color: var(--red-border); }
+  .panel-cell.gradient .panel-power { color: #1a0d00; }
+  .panel-cell.gradient .panel-name  { color: rgba(26,13,0,0.65); }
+  .panel-cell.gradient .panel-wh    { color: rgba(26,13,0,0.55); }
 
   .panel-name {
     font-size: 0.68rem;
@@ -159,9 +159,6 @@
     font-variant-numeric: tabular-nums;
     color: var(--text);
   }
-  .panel-cell.green  .panel-power { color: var(--green); }
-  .panel-cell.yellow .panel-power { color: var(--yellow); }
-  .panel-cell.red    .panel-power { color: var(--red); }
   .panel-wh {
     font-size: 0.7rem;
     color: var(--text-muted);
@@ -194,6 +191,41 @@
     cursor: pointer;
     display: block;
   }
+
+  /* Color legend bar */
+  .color-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.3rem 1rem;
+    border-top: 1px solid var(--border);
+    width: 50%;
+    min-width: 400px;
+    margin: 0 auto;
+    box-sizing: border-box;
+  }
+  .legend-bar {
+    flex: 1;
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(to right,
+      #7a7a7a 0%,
+      #7a7a7a 2%,
+      hsl(55,70%,82%) 5%,
+      hsl(39,85%,65%) 55%,
+      hsl(22,100%,48%) 100%
+    );
+  }
+  .legend-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    white-space: nowrap;
+    letter-spacing: 0.04em;
+  }
+  .legend-low  { background: #7a7a7a; color: #fff; }
+  .legend-high { background: hsl(22,100%,48%); color: #1a0d00; }
 
   /* Nav row: [ spacer ] [ < date > Today ] [ time  Live ] */
   .arc-nav {
@@ -281,20 +313,88 @@
     overflow: hidden;
   }
 
-  /* Grid import/export chart: mirrors arc-chart-panel on the left */
-  .arc-grid-panel {
+  /* Left panel (Grid and/or Battery): mirrors arc-chart-panel on the left */
+  .arc-left-panel {
     position: absolute;
     left: 0.35rem;
     right: calc(75% + 0.5rem);
     top: 0.25rem;
     bottom: 0.5rem;
+    display: flex;
     flex-direction: column;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
   }
-  @media (max-width: 860px) { .arc-grid-panel { display: none !important; } }
+  @media (max-width: 860px) { .arc-left-panel { display: none !important; } }
+
+  /* Grid/Battery type tabs at the top of the left panel */
+  .left-type-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .left-type-tab {
+    flex: 1;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.3rem 0.4rem;
+    margin-bottom: -1px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-family: inherit;
+  }
+  .left-type-tab:hover:not(.active) { color: var(--text); }
+  .left-type-tab.active { border-bottom-color: var(--accent); color: var(--accent); }
+
+  /* Grid and battery content divs: fill remaining panel space */
+  #left-grid-content, #left-battery-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Battery status rows below the chart-panel-header */
+  .battery-status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.18rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    gap: 0.4rem;
+    min-height: 0;
+  }
+  .battery-stat-power {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .battery-stat-mode {
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: right;
+  }
+  .battery-stat-today {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
 
   /* Grid chart body: canvas on left, tabs on right */
   .grid-chart-body { flex-direction: row; }
@@ -365,7 +465,7 @@
     padding: 0.3rem 0.4rem 0.3rem 0.3rem;
     position: relative;
   }
-  #array-chart, #grid-chart { width: 100%; height: 100%; display: block; }
+  #array-chart, #grid-chart, #battery-chart { width: 100%; height: 100%; display: block; }
   .chart-tooltip {
     display: none;
     position: absolute;
@@ -470,6 +570,51 @@
     text-align: right;
   }
   .settings-input:focus { outline: none; border-color: var(--accent); }
+  .settings-textarea {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    padding: 0.3rem 0.5rem;
+    font-size: 0.85rem;
+    font-family: inherit;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 4.5rem;
+    resize: vertical;
+    margin-top: 0.25rem;
+  }
+  .settings-textarea:focus { outline: none; border-color: var(--accent); }
+  .settings-row-block { flex-direction: column; align-items: flex-start; }
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: var(--border);
+    border-radius: 20px;
+    transition: background 0.2s;
+  }
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    left: 3px;
+    bottom: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .toggle-switch input:checked + .toggle-slider { background: var(--accent); }
+  .toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); }
   .modal-actions { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
   .modal-btn {
     background: var(--surface2);

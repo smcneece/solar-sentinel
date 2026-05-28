@@ -411,6 +411,266 @@ async def get_grid_stats_chart(import_id, import_unit: str,
     return points
 
 
+# ── Battery discovery ────────────────────────────────────────────────────
+
+async def discover_battery_sources() -> list:
+    """Discover battery descriptors from the Energy Dashboard.
+
+    Returns one dict per type:"battery" energy source:
+      idx, name, power_entity_id, power_unit,
+      charge_energy_id, charge_unit, discharge_energy_id, discharge_unit,
+      soc_entity_id, mode_entity_id (optional), device_entity_ids
+    """
+    energy_config = await get_energy_config()
+    battery_srcs = [s for s in energy_config.get("energy_sources", [])
+                    if s.get("type") == "battery"]
+    if not battery_srcs:
+        _LOGGER.info("No battery sources in Energy Dashboard")
+        return []
+
+    registry = await get_entity_registry()
+    registry_by_id = {e["entity_id"]: e for e in registry}
+    by_device: dict = {}
+    for e in registry:
+        dev = e.get("device_id")
+        if dev:
+            by_device.setdefault(dev, []).append(e)
+
+    result = []
+    for idx, src in enumerate(battery_srcs):
+        discharge_eid = src.get("stat_energy_from")
+        charge_eid    = src.get("stat_energy_to")
+        power_eid     = src.get("stat_rate")
+
+        device_id = None
+        for eid in (discharge_eid, charge_eid, power_eid):
+            if eid:
+                dev = registry_by_id.get(eid, {}).get("device_id")
+                if dev:
+                    device_id = dev
+                    break
+
+        device_entries = by_device.get(device_id, []) if device_id else []
+        device_eids = [e["entity_id"] for e in device_entries]
+
+        candidate_ids = list({discharge_eid, charge_eid, power_eid} | set(device_eids) - {None})
+        states = await get_entity_states_batch([x for x in candidate_ids if x])
+
+        power_unit = "W"
+        if power_eid and power_eid in states:
+            u = states[power_eid].get("attributes", {}).get("unit_of_measurement", "W")
+            if u in ("W", "kW"):
+                power_unit = u
+
+        soc_candidates = []
+        for entry in device_entries:
+            eid = entry["entity_id"]
+            attrs = states.get(eid, {}).get("attributes", {})
+            if (attrs.get("unit_of_measurement") == "%" and
+                    attrs.get("state_class") == "measurement"):
+                soc_candidates.append({
+                    "entity_id": eid,
+                    "friendly_name": attrs.get("friendly_name", eid),
+                })
+
+        soc_entity_id = None
+        panel_name = "Battery" if len(battery_srcs) == 1 else f"Battery {idx + 1}"
+        if soc_candidates:
+            best = min(soc_candidates, key=lambda c: len(c["friendly_name"]))
+            soc_entity_id = best["entity_id"]
+            raw_name = best["friendly_name"]
+            for suffix in (" State of Charge", " SOC", " SoC"):
+                if raw_name.endswith(suffix):
+                    raw_name = raw_name[: -len(suffix)].strip()
+                    break
+            if raw_name:
+                panel_name = raw_name
+
+        mode_entity_id = None
+        for keyword in ("operating_mode", "mode"):
+            for entry in device_entries:
+                eid = entry["entity_id"]
+                if keyword in eid.lower():
+                    raw = states.get(eid, {}).get("state", "")
+                    if raw and raw not in ("unavailable", "unknown"):
+                        mode_entity_id = eid
+                        break
+            if mode_entity_id:
+                break
+
+        def _unit(eid, fallback="kWh"):
+            if not eid:
+                return fallback
+            u = states.get(eid, {}).get("attributes", {}).get("unit_of_measurement", fallback)
+            return u if u in ("Wh", "kWh") else fallback
+
+        result.append({
+            "idx": idx,
+            "name": panel_name,
+            "power_entity_id": power_eid,
+            "power_unit": power_unit,
+            "charge_energy_id": charge_eid,
+            "charge_unit": _unit(charge_eid),
+            "discharge_energy_id": discharge_eid,
+            "discharge_unit": _unit(discharge_eid),
+            "soc_entity_id": soc_entity_id,
+            "mode_entity_id": mode_entity_id,
+            "device_entity_ids": device_eids,
+        })
+
+    _LOGGER.info("Discovered %d battery source(s)", len(result))
+    return result
+
+
+async def get_battery_today_kwh(batteries: list, tz_name: str) -> dict:
+    """Return today's charged and discharged kWh per battery energy sensor.
+
+    Returns dict of entity_id -> kwh_float."""
+    energy_pairs = []
+    for bat in batteries:
+        for eid, unit in (
+            (bat.get("charge_energy_id"), bat.get("charge_unit", "kWh")),
+            (bat.get("discharge_energy_id"), bat.get("discharge_unit", "kWh")),
+        ):
+            if eid:
+                energy_pairs.append((eid, unit))
+    if not energy_pairs:
+        return {}
+
+    try:
+        tz = zoneinfo.ZoneInfo(tz_name) if tz_name else datetime.timezone.utc
+    except Exception:
+        tz = datetime.timezone.utc
+
+    now = datetime.datetime.now(tz)
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    statistic_ids = [p[0] for p in energy_pairs]
+    unit_map = {p[0]: p[1] for p in energy_pairs}
+
+    token = _token()
+    result = {}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.ws_connect(
+                _HA_WS_URL, timeout=aiohttp.ClientTimeout(total=20)
+            ) as ws:
+                msg = await asyncio.wait_for(ws.receive_json(), timeout=5)
+                if msg.get("type") != "auth_required":
+                    return {}
+                await ws.send_json({"type": "auth", "access_token": token})
+                msg = await asyncio.wait_for(ws.receive_json(), timeout=5)
+                if msg.get("type") != "auth_ok":
+                    return {}
+                await ws.send_json({
+                    "id": 1,
+                    "type": "recorder/statistics_during_period",
+                    "start_time": midnight.isoformat(),
+                    "end_time": now.isoformat(),
+                    "statistic_ids": statistic_ids,
+                    "period": "day",
+                    "types": ["change"],
+                })
+                msg = await asyncio.wait_for(ws.receive_json(), timeout=30)
+                if not msg.get("success"):
+                    _LOGGER.warning("Battery today kWh stats failed: %s", msg.get("error"))
+                    return {}
+                data = msg.get("result", {})
+        for eid in statistic_ids:
+            entries = data.get(eid, [])
+            if entries:
+                change = entries[0].get("change") or 0
+                kwh = float(change) if unit_map.get(eid) != "Wh" else float(change) / 1000
+                result[eid] = round(max(0.0, kwh), 2)
+    except Exception:
+        _LOGGER.exception("Failed to fetch battery today kWh")
+    return result
+
+
+async def get_battery_soc_history(soc_entity_id: str, date_str: str, tz_name: str) -> list:
+    """Fetch SoC % history for the given date via the HA history API.
+
+    Returns list of {ts_ms, soc_pct} sorted chronologically."""
+    history = await get_panel_history([soc_entity_id], date_str, tz_name)
+    points = history.get(soc_entity_id, [])
+    return [{"ts_ms": pt["ts"], "soc_pct": pt["w"]} for pt in points]
+
+
+async def get_battery_stats_chart(charge_id, charge_unit: str,
+                                  discharge_id, discharge_unit: str,
+                                  start_utc: datetime.datetime,
+                                  end_utc: datetime.datetime,
+                                  period: str) -> list:
+    """Fetch charged and discharged kWh statistics for the battery chart.
+
+    Returns list of {ts_ms, charged_kwh, discharged_kwh}."""
+    stat_ids = [x for x in (charge_id, discharge_id) if x]
+    if not stat_ids:
+        return []
+
+    token = _token()
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.ws_connect(
+                _HA_WS_URL, timeout=aiohttp.ClientTimeout(total=30)
+            ) as ws:
+                msg = await asyncio.wait_for(ws.receive_json(), timeout=5)
+                if msg.get("type") != "auth_required":
+                    return []
+                await ws.send_json({"type": "auth", "access_token": token})
+                msg = await asyncio.wait_for(ws.receive_json(), timeout=5)
+                if msg.get("type") != "auth_ok":
+                    return []
+                await ws.send_json({
+                    "id": 1,
+                    "type": "recorder/statistics_during_period",
+                    "start_time": start_utc.isoformat(),
+                    "end_time": end_utc.isoformat(),
+                    "statistic_ids": stat_ids,
+                    "period": period,
+                    "types": ["change"],
+                })
+                msg = await asyncio.wait_for(ws.receive_json(), timeout=30)
+                if not msg.get("success"):
+                    _LOGGER.warning("Battery chart stats failed: %s", msg.get("error"))
+                    return []
+                data = msg.get("result", {})
+    except Exception:
+        _LOGGER.exception("Failed to fetch battery chart stats")
+        return []
+
+    def _ts_map(eid, unit):
+        m = {}
+        for entry in data.get(eid, []):
+            ts = entry.get("start")
+            change = entry.get("change")
+            if ts is None or change is None:
+                continue
+            try:
+                if isinstance(ts, (int, float)):
+                    ts_ms = int(ts)
+                else:
+                    ts_ms = int(datetime.datetime.fromisoformat(
+                        ts.replace("Z", "+00:00")).timestamp() * 1000)
+                kwh = float(change) if unit != "Wh" else float(change) / 1000
+                m[ts_ms] = max(0.0, kwh)
+            except Exception:
+                continue
+        return m
+
+    charge_map    = _ts_map(charge_id, charge_unit)       if charge_id    else {}
+    discharge_map = _ts_map(discharge_id, discharge_unit) if discharge_id else {}
+
+    all_ts = set(charge_map) | set(discharge_map)
+    points = []
+    for ts_ms in sorted(all_ts):
+        points.append({
+            "ts_ms":          ts_ms,
+            "charged_kwh":    round(charge_map.get(ts_ms, 0.0), 3),
+            "discharged_kwh": round(discharge_map.get(ts_ms, 0.0), 3),
+        })
+    return points
+
+
 # ── Entity rename ────────────────────────────────────────────────────────
 
 async def rename_entity(entity_id: str, name) -> bool:
@@ -781,6 +1041,61 @@ async def get_panel_history(entity_ids: list, date_str: str, tz_name: str) -> di
             result[eid] = points
 
     _LOGGER.debug("History for %s: %d series returned", date_str, len(result))
+    return result
+
+
+# ── Entity states at a historical timestamp ──────────────────────────────
+
+async def get_entity_states_at_time(entity_ids: list, target_dt: datetime.datetime) -> dict:
+    """Return the last-known state for each entity at or before target_dt.
+
+    Uses a 2-hour lookback window. Returns dict of entity_id -> state_string."""
+    if not entity_ids:
+        return {}
+
+    start_dt = target_dt - datetime.timedelta(hours=2)
+    start_str = start_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_str = target_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    params = urlencode({
+        "filter_entity_id": ",".join(entity_ids),
+        "end_time": end_str,
+        "minimal_response": "true",
+        "no_attributes": "true",
+    })
+    url = f"{HA_API_URL}/history/period/{start_str}?{params}"
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                url, headers=_headers(), timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status != 200:
+                    return {}
+                raw = await resp.json()
+    except Exception:
+        _LOGGER.exception("Failed to fetch entity states at time")
+        return {}
+
+    target_ts_ms = target_dt.timestamp() * 1000
+    result = {}
+    for series in raw:
+        if not series:
+            continue
+        eid = series[0].get("entity_id")
+        if not eid:
+            continue
+        best = None
+        for item in series:
+            ts_str = item.get("last_changed", "")
+            try:
+                dt = datetime.datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                if dt.timestamp() * 1000 <= target_ts_ms:
+                    best = item.get("state", "")
+            except Exception:
+                continue
+        if best is not None:
+            result[eid] = best
     return result
 
 
