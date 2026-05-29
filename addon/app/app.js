@@ -90,6 +90,7 @@ async function fetchSettings() {
     st.nameStrip = (s.name_strip || '').split(',').map(x => x.trim()).filter(Boolean);
     st.showPanelNames = s.show_panel_names !== false;
     st.minAvgW = s.min_avg_w ?? 5;
+    st.invertBatteryPower = s.invert_battery_power === true;
     applyLeftPanelVisibility();
   } catch (e) { /* ignore */ }
 }
@@ -238,6 +239,7 @@ async function openSettings() {
     document.getElementById('setting-min-avg-w').value = s.min_avg_w ?? 5;
     document.getElementById('setting-show-grid').checked = s.show_grid_chart !== false;
     document.getElementById('setting-show-panel-names').checked = s.show_panel_names !== false;
+    document.getElementById('setting-invert-battery').checked = s.invert_battery_power === true;
     document.getElementById('setting-name-strip').value = s.name_strip || '';
   } catch (e) { console.error('openSettings:', e); }
 }
@@ -254,6 +256,7 @@ async function saveSettings() {
         min_avg_w: Math.max(0, parseInt(document.getElementById('setting-min-avg-w').value) || 0),
         show_grid_chart: showGrid,
         show_panel_names: document.getElementById('setting-show-panel-names').checked,
+        invert_battery_power: document.getElementById('setting-invert-battery').checked,
         name_strip: document.getElementById('setting-name-strip').value.trim(),
       }),
     });
@@ -262,6 +265,7 @@ async function saveSettings() {
     st.nameStrip = (document.getElementById('setting-name-strip').value.trim())
       .split(',').map(x => x.trim()).filter(Boolean);
     st.showPanelNames = document.getElementById('setting-show-panel-names').checked;
+    st.invertBatteryPower = document.getElementById('setting-invert-battery').checked;
     st.minAvgW = Math.max(0, parseInt(document.getElementById('setting-min-avg-w').value) || 0);
     applyLeftPanelVisibility();
     renderPanels(st.panels);
@@ -279,11 +283,33 @@ async function fetchBatteryStatus() {
     const data = await resp.json();
     const batteries = data.batteries || [];
     if (!batteries.length) return;
-    st.batteryStatus = batteries[0];
+    st.batteryList = batteries;
+    if (st.selectedBatteryIdx >= batteries.length) st.selectedBatteryIdx = 0;
+    st.batteryStatus = batteries[st.selectedBatteryIdx];
+    renderBatterySelector();
     updateBatteryStatusDisplay(st.batteryStatus);
   } catch (e) {
     console.error('fetchBatteryStatus:', e);
   }
+}
+
+function renderBatterySelector() {
+  const el = document.getElementById('battery-selector');
+  if (!el) return;
+  if (st.batteryList.length < 2) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = st.batteryList.map((b, i) =>
+    `<button class="battery-sel-btn${i === st.selectedBatteryIdx ? ' active' : ''}" data-idx="${i}">${b.name || 'Battery ' + (i+1)}</button>`
+  ).join('');
+  el.querySelectorAll('.battery-sel-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      st.selectedBatteryIdx = parseInt(btn.dataset.idx);
+      st.batteryStatus = st.batteryList[st.selectedBatteryIdx];
+      renderBatterySelector();
+      updateBatteryStatusDisplay(st.batteryStatus);
+      fetchBatteryChart();
+    });
+  });
 }
 
 function updateBatteryStatusDisplay(bat) {

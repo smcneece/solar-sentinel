@@ -24,6 +24,8 @@ export const st = {
   batteryChartType: 'soc',
   lastBatteryPoints: [],
   batteryStatus: null,
+  batteryList: [],
+  selectedBatteryIdx: 0,
   gridLayout: null,
   editMode: false,
   editPositions: {},
@@ -37,4 +39,5 @@ export const st = {
   nameStrip: [],
   showPanelNames: true,
   minAvgW: 5,
+  invertBatteryPower: false,
 };

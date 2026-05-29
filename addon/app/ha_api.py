@@ -440,7 +440,26 @@ async def discover_battery_sources() -> list:
     for idx, src in enumerate(battery_srcs):
         discharge_eid = src.get("stat_energy_from")
         charge_eid    = src.get("stat_energy_to")
-        power_eid     = src.get("stat_rate")
+
+        # HA stores power config in power_config (newer) or stat_rate (legacy)
+        power_config = src.get("power_config", {})
+        if power_config:
+            if "stat_rate_inverted" in power_config:
+                power_eid = power_config["stat_rate_inverted"]
+                ha_invert = True
+            elif "stat_rate" in power_config:
+                power_eid = power_config["stat_rate"]
+                ha_invert = False
+            elif "stat_rate_from" in power_config or "stat_rate_to" in power_config:
+                # Two-sensor config: separate charge/discharge rate entities; not yet supported
+                power_eid = None
+                ha_invert = False
+            else:
+                power_eid = None
+                ha_invert = False
+        else:
+            power_eid = src.get("stat_rate")
+            ha_invert = False
 
         device_id = None
         for eid in (discharge_eid, charge_eid, power_eid):
@@ -504,6 +523,10 @@ async def discover_battery_sources() -> list:
             u = states.get(eid, {}).get("attributes", {}).get("unit_of_measurement", fallback)
             return u if u in ("Wh", "kWh") else fallback
 
+        invert_power = ha_invert
+        if ha_invert:
+            _LOGGER.info("Battery %d: HA config reports inverted power sensor (stat_rate_inverted)", idx)
+
         result.append({
             "idx": idx,
             "name": panel_name,
@@ -516,8 +539,12 @@ async def discover_battery_sources() -> list:
             "soc_entity_id": soc_entity_id,
             "mode_entity_id": mode_entity_id,
             "device_entity_ids": device_eids,
+            "invert_power": invert_power,
         })
 
+    result.sort(key=lambda b: b["name"])
+    for i, b in enumerate(result):
+        b["idx"] = i
     _LOGGER.info("Discovered %d battery source(s)", len(result))
     return result
 

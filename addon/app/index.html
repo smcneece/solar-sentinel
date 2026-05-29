@@ -64,6 +64,7 @@
     </div>
     <!-- Battery content -->
     <div id="left-battery-content" style="display:none">
+      <div class="battery-selector" id="battery-selector" style="display:none"></div>
       <div class="chart-panel-header">
         <span class="chart-panel-title" id="battery-panel-title">Battery</span>
         <span class="chart-total-kwh" id="battery-soc-pct">-- %</span>
@@ -185,6 +186,13 @@
       <label for="setting-show-panel-names">Show panel names on panels</label>
       <label class="toggle-switch">
         <input type="checkbox" id="setting-show-panel-names" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="settings-row">
+      <label for="setting-invert-battery">Invert battery power direction (enable if charging shows as discharging; HA Standard convention is positive = discharging, negative = charging)</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="setting-invert-battery">
         <span class="toggle-slider"></span>
       </label>
     </div>

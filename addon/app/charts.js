@@ -406,7 +406,8 @@ function _drawBatteryMessage(msg) {
 
 export async function fetchBatteryChart() {
   const range = st.batteryChartRange;
-  let url = `${window.BASE}/api/battery_chart?range=${range}`;
+  const idx = st.selectedBatteryIdx ?? 0;
+  let url = `${window.BASE}/api/battery_chart?range=${range}&idx=${idx}`;
   if (range === 'today') {
     const dateVal = document.getElementById('date-picker').value;
     if (dateVal) url += `&date=${dateVal}`;

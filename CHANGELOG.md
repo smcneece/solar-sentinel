@@ -5,6 +5,14 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.05.6 - May 28, 2026
+
+- Fixed battery chart Today/Week/Month/Year buttons appearing as unstyled browser defaults instead of matching the UI
+- Fixed battery charge/discharge direction inverted: Solar Sentinel's direction logic had the sign convention backwards relative to HA Standard (positive = discharging, negative = charging); all users with a battery power sensor configured in the Energy Dashboard were affected
+- Battery discovery now reads HA's power_config.stat_rate_inverted field; if a battery power sensor is configured as "Inverted" in the HA Energy Dashboard (typically for a physically reversed CT clamp), the direction is corrected automatically
+- Added "Invert battery power direction" toggle in Settings as a manual fallback for any integration where charging still shows as discharging after updating
+- Added multiple battery support: if more than one battery system is configured in the HA Energy Dashboard, selector buttons appear at the top of the battery panel to switch between them; batteries are sorted alphabetically by name; the battery chart follows the selected battery
+
 ## v2026.05.5 - May 27, 2026
 
 - Added battery panel: if a battery source is configured in the HA Energy Dashboard, a Battery tab appears in the left panel alongside Grid; shows current SoC %, charge/discharge direction with live power, operating mode, and today's kWh charged in/out; chart has four views: Today (SoC % line for the full 24-hour window), Week/Month/Year (charged vs. discharged kWh as grouped bars); if only battery is present with no grid sensors, it shows directly without tabs

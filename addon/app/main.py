@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "2026.05.5"
+VERSION = "2026.05.6"
 
 _inverters: list = []        # discovered inverter descriptors
 _panels_cache: list = []     # latest computed panel states
@@ -848,6 +848,7 @@ async def handle_api_battery_status(request):
 
     states = await ha_api.get_entity_states_batch(entity_ids)
     today_kwh = await ha_api.get_battery_today_kwh(_batteries, _ha_tz)
+    invert_global = storage.get_settings().get("invert_battery_power", False)
 
     result_list = []
     for bat in _batteries:
@@ -861,11 +862,14 @@ async def handle_api_battery_status(request):
                     val = float(raw)
                     if bat.get("power_unit") == "kW":
                         val *= 1000
+                    if invert_global or bat.get("invert_power", False):
+                        val = -val
+                    # HA Standard: positive = discharging, negative = charging
                     if val > 10:
-                        direction = "charging"
+                        direction = "discharging"
                         power_w = val
                     elif val < -10:
-                        direction = "discharging"
+                        direction = "charging"
                         power_w = abs(val)
                     else:
                         direction = "idle"

@@ -362,6 +362,28 @@
     overflow: hidden;
   }
 
+  /* Battery selector (shown when multiple batteries discovered) */
+  .battery-selector {
+    display: flex;
+    gap: 0.3rem;
+    padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .battery-sel-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-family: inherit;
+  }
+  .battery-sel-btn:hover { color: var(--text); background: var(--surface2); }
+  .battery-sel-btn.active { color: var(--accent); border-color: var(--accent); background: rgba(245,166,35,0.10); }
+
   /* Battery status rows below the chart-panel-header */
   .battery-status-row {
     display: flex;
@@ -443,7 +465,7 @@
     gap: 0.1rem;
     flex-shrink: 0;
   }
-  .chart-tab, .grid-chart-tab {
+  .chart-tab, .grid-chart-tab, .battery-chart-tab {
     background: none;
     border: none;
     color: var(--text-muted);
@@ -456,8 +478,8 @@
     white-space: nowrap;
     font-family: inherit;
   }
-  .chart-tab:hover, .grid-chart-tab:hover { color: var(--text); background: var(--surface2); }
-  .chart-tab.active, .grid-chart-tab.active { color: var(--accent); background: rgba(245,166,35,0.10); }
+  .chart-tab:hover, .grid-chart-tab:hover, .battery-chart-tab:hover { color: var(--text); background: var(--surface2); }
+  .chart-tab.active, .grid-chart-tab.active, .battery-chart-tab.active { color: var(--accent); background: rgba(245,166,35,0.10); }
   .chart-canvas-wrap {
     flex: 1;
     min-width: 0;
