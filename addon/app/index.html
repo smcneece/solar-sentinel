@@ -102,7 +102,12 @@
       <input type="range" id="time-slider" min="0" max="1440" value="1440" step="5">
     </div>
     <div class="arc-nav">
-      <div class="arc-nav-left"></div>
+      <div class="arc-nav-left">
+        <button class="arc-nav-btn" id="play-jump-btn" title="Jump to start of day">|&#9664;</button>
+        <button class="arc-nav-btn" id="play-btn" title="Play">&#9654;</button>
+        <button class="arc-nav-btn" id="play-speed-btn" title="Playback speed">1x</button>
+        <span class="slider-time" id="slider-label">Now</span>
+      </div>
       <div class="arc-nav-center">
         <button class="arc-nav-btn arc-day-arrow" id="prev-day-btn" title="Previous day">&#8249;</button>
         <input type="date" id="date-picker">
@@ -110,7 +115,6 @@
         <button class="arc-nav-btn" id="today-btn">Today</button>
       </div>
       <div class="arc-nav-right">
-        <span class="slider-time" id="slider-label">Now</span>
         <button class="arc-live-btn active" id="live-btn">Live</button>
       </div>
     </div>
@@ -189,7 +193,7 @@
         <span class="toggle-slider"></span>
       </label>
     </div>
-    <div class="settings-row">
+    <div class="settings-row" id="setting-invert-battery-row">
       <label for="setting-invert-battery">Invert battery power direction (enable if charging shows as discharging; HA Standard convention is positive = discharging, negative = charging)</label>
       <label class="toggle-switch">
         <input type="checkbox" id="setting-invert-battery">

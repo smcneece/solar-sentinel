@@ -36,6 +36,9 @@ Should work with any solar integration already configured in the Energy Dashboar
 
 ![Panel history](images/modal-history.png)
 
+**Settings**
+
+![Settings](images/settings-modal.png)
 
 ---
 
@@ -175,6 +178,8 @@ After installation, two things will make the most difference:
 Open **Settings** (the gear icon in the header) and set the refresh interval to match your solar integration's polling frequency. The default is 5 minutes, which works well for Enhanced SunPower and similar integrations whose hardware updates every 5 minutes. If your integration polls more frequently, lower the value; the minimum is 30 seconds. Setting it shorter than your integration actually refreshes only adds load with no benefit.
 
 ### 2. Set Up Your Panel Layout
+
+> **Tip before you start:** Many solar integrations prefix every panel name with the brand or device type, leaving you with names like "SunPower Inverter E00100000000001" on every card. Open **Settings** and add those repeated words to the **Strip from panel names** field (comma-separated) before you begin placing panels. The cards will show just the short unique part of each name, making it much easier to identify panels during layout. This is display-only; nothing is renamed in Home Assistant.
 
 Out of the box, all discovered panels appear in an unplaced tray below the grid. Click **Layout Editor** in the header to open the editor:
 

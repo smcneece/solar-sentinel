@@ -1,29 +1,29 @@
 import { fmtTime } from './utils.js';
 
-function moonSvg(phase, cx, cy, r) {
+function moonSvg(phase, cx, cy, rx, ry) {
   const lit  = 'rgba(230,218,165,0.95)';
   const dark = 'rgba(14,18,52,0.97)';
   const rim  = 'rgba(110,140,210,0.60)';
   const id   = `mc${cx}${cy}`;
-  const clip = `<defs><clipPath id="${id}"><circle cx="${cx}" cy="${cy}" r="${r}"/></clipPath></defs>`;
-  const base = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${dark}"/>`;
-  const edge = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${rim}" stroke-width="1.5"/>`;
+  const clip = `<defs><clipPath id="${id}"><ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}"/></clipPath></defs>`;
+  const base = `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${dark}"/>`;
+  const edge = `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="${rim}" stroke-width="1.5"/>`;
   const c = (p) => `clip-path="url(#${id})" fill="${lit}" d="${p}"`;
+  const irx = (rx * 0.72).toFixed(1);
   if (phase === 'new_moon')  return clip + base + edge;
-  if (phase === 'full_moon') return clip + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${lit}" stroke="${rim}" stroke-width="0.8"/>`;
+  if (phase === 'full_moon') return clip + `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${lit}" stroke="${rim}" stroke-width="0.8"/>`;
   if (phase === 'first_quarter')
-    return clip + base + `<path ${c(`M ${cx},${cy-r} A ${r},${r} 0 0,1 ${cx},${cy+r} L ${cx},${cy-r} Z`)}/>` + edge;
+    return clip + base + `<path ${c(`M ${cx},${cy-ry} A ${rx},${ry} 0 0,1 ${cx},${cy+ry} L ${cx},${cy-ry} Z`)}/>` + edge;
   if (phase === 'last_quarter')
-    return clip + base + `<path ${c(`M ${cx},${cy-r} A ${r},${r} 0 0,0 ${cx},${cy+r} L ${cx},${cy-r} Z`)}/>` + edge;
-  const rx = (r * 0.72).toFixed(1);
+    return clip + base + `<path ${c(`M ${cx},${cy-ry} A ${rx},${ry} 0 0,0 ${cx},${cy+ry} L ${cx},${cy-ry} Z`)}/>` + edge;
   if (phase === 'waxing_crescent')
-    return clip + base + `<path ${c(`M ${cx},${cy-r} A ${r},${r} 0 0,1 ${cx},${cy+r} A ${rx},${r} 0 0,0 ${cx},${cy-r} Z`)}/>` + edge;
+    return clip + base + `<path ${c(`M ${cx},${cy-ry} A ${rx},${ry} 0 0,1 ${cx},${cy+ry} A ${irx},${ry} 0 0,0 ${cx},${cy-ry} Z`)}/>` + edge;
   if (phase === 'waxing_gibbous')
-    return clip + base + `<path ${c(`M ${cx},${cy-r} A ${r},${r} 0 0,1 ${cx},${cy+r} A ${rx},${r} 0 0,1 ${cx},${cy-r} Z`)}/>` + edge;
+    return clip + base + `<path ${c(`M ${cx},${cy-ry} A ${rx},${ry} 0 0,1 ${cx},${cy+ry} A ${irx},${ry} 0 0,1 ${cx},${cy-ry} Z`)}/>` + edge;
   if (phase === 'waning_gibbous')
-    return clip + base + `<path ${c(`M ${cx},${cy-r} A ${r},${r} 0 0,0 ${cx},${cy+r} A ${rx},${r} 0 0,0 ${cx},${cy-r} Z`)}/>` + edge;
+    return clip + base + `<path ${c(`M ${cx},${cy-ry} A ${rx},${ry} 0 0,0 ${cx},${cy+ry} A ${irx},${ry} 0 0,0 ${cx},${cy-ry} Z`)}/>` + edge;
   if (phase === 'waning_crescent')
-    return clip + base + `<path ${c(`M ${cx},${cy-r} A ${r},${r} 0 0,0 ${cx},${cy+r} A ${rx},${r} 0 0,1 ${cx},${cy-r} Z`)}/>` + edge;
+    return clip + base + `<path ${c(`M ${cx},${cy-ry} A ${rx},${ry} 0 0,0 ${cx},${cy+ry} A ${irx},${ry} 0 0,1 ${cx},${cy-ry} Z`)}/>` + edge;
   return clip + base + edge;
 }
 
@@ -101,7 +101,13 @@ export function renderSunArc(sun, currentMs) {
     const mTs = viewStart + (dawn_ts - viewStart) * 0.5;
     const mx = tx(mTs).toFixed(1);
     const my = 52;
-    moonIcon = moonSvg(sun.moon_phase, parseFloat(mx), my, 16);
+    const moonRy = 16;
+    // Compute rx to compensate for SVG x-stretch so the moon appears circular.
+    // getBoundingClientRect gives the actual rendered pixel width; clientWidth returns
+    // the SVG viewBox width (800) which is wrong here.
+    const svgRenderedW = svg.getBoundingClientRect().width || W;
+    const moonRx = parseFloat((moonRy * (200 / H) * (W / svgRenderedW)).toFixed(2));
+    moonIcon = moonSvg(sun.moon_phase, parseFloat(mx), my, moonRx, moonRy);
   }
 
   function aboveLabel(ts, label) {

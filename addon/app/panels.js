@@ -46,6 +46,8 @@ export function makePanelCard(p, isDraggable) {
     cell.addEventListener('dragstart', e => {
       st.dragEntityId = p.entity_id;
       e.dataTransfer.effectAllowed = 'move';
+      st.dragOffsetRow = 0;
+      st.dragOffsetCol = 0;
     });
     cell.addEventListener('dragend', () => { st.dragEntityId = null; });
   } else {
@@ -104,7 +106,8 @@ export function renderGridView(panels, section, msg) {
   const grid = document.createElement('div');
   grid.className = 'panel-grid-pos';
   grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
-  grid.style.gridTemplateRows = `repeat(${rows}, 24px)`;
+  grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+  grid.style.aspectRatio = `${cols} / ${rows}`;
 
   for (const [key, eid] of Object.entries(panelAt)) {
     const [fr, fc] = key.split(',').map(Number);

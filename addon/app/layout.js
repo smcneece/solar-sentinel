@@ -127,7 +127,8 @@ export function renderEditMode(panels) {
   const grid = document.createElement('div');
   grid.className = 'panel-grid-pos edit-active';
   grid.style.gridTemplateColumns = `repeat(${st.editCols}, minmax(0, 1fr))`;
-  grid.style.gridTemplateRows = `repeat(${st.editRows}, 24px)`;
+  grid.style.gridTemplateRows = `repeat(${st.editRows}, minmax(0, 1fr))`;
+  grid.style.aspectRatio = `${st.editCols} / ${st.editRows}`;
 
   function wouldOverlap(tr, tc, dragEid) {
     const [sc, sr] = getSpan(dragEid, st.editRotations);
@@ -167,7 +168,11 @@ export function renderEditMode(panels) {
     card.style.gridRow = `${fr + 1} / span ${spanRows}`;
     card.dataset.row = fr;
     card.dataset.col = fc;
-    card.addEventListener('dragstart', () => {
+    card.addEventListener('dragstart', (e) => {
+      const w = card.offsetWidth || 1;
+      const h = card.offsetHeight || 1;
+      st.dragOffsetCol = Math.min(spanCols - 1, Math.max(0, Math.floor(e.offsetX / w * spanCols)));
+      st.dragOffsetRow = Math.min(spanRows - 1, Math.max(0, Math.floor(e.offsetY / h * spanRows)));
       setTimeout(() => renderEditMode(st.panels), 0);
     });
     card.addEventListener('dragend', () => renderEditMode(st.panels));
@@ -257,8 +262,9 @@ export function renderEditMode(panels) {
       cell.addEventListener('drop', e => {
         e.preventDefault();
         cell.classList.remove('drag-over');
-        const tr = parseInt(cell.dataset.row), tc = parseInt(cell.dataset.col);
         if (st.dragEntityId) {
+          const tr = Math.max(0, parseInt(cell.dataset.row) - st.dragOffsetRow);
+          const tc = Math.max(0, parseInt(cell.dataset.col) - st.dragOffsetCol);
           if (wouldOverlap(tr, tc, st.dragEntityId)) return;
           const wasUnplaced = !(st.dragEntityId in st.editPositions);
           delete st.editPositions[st.dragEntityId];
@@ -266,6 +272,8 @@ export function renderEditMode(panels) {
           if (wasUnplaced) st.editRotations[st.dragEntityId] = st.bankDefaultRotation;
           renderEditMode(st.panels);
         } else if (st.dragLabelId) {
+          const tr = parseInt(cell.dataset.row);
+          const tc = parseInt(cell.dataset.col);
           const lbl = st.editLabels.find(l => l.id === st.dragLabelId);
           if (!lbl) return;
           if (labelWouldOverlap(tr, tc, st.dragLabelId, lbl.spanCols, lbl.spanRows)) return;
@@ -319,6 +327,13 @@ export function renderEditMode(panels) {
   tray.className = 'unplaced-tray' + (st.bankDefaultRotation ? ' portrait' : '');
   for (const p of unplaced) {
     const bc = makePanelCard(p, true);
+    bc.addEventListener('dragstart', (e) => {
+      const [sc, sr] = getSpan(p.entity_id, {[p.entity_id]: st.bankDefaultRotation});
+      const w = bc.offsetWidth || 1;
+      const h = bc.offsetHeight || 1;
+      st.dragOffsetCol = Math.min(sc - 1, Math.max(0, Math.floor(e.offsetX / w * sc)));
+      st.dragOffsetRow = Math.min(sr - 1, Math.max(0, Math.floor(e.offsetY / h * sr)));
+    });
     bc.addEventListener('dragend', () => renderEditMode(st.panels));
     tray.appendChild(bc);
   }

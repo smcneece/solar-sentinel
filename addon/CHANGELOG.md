@@ -5,6 +5,15 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.05.7 - May 29, 2026
+
+- Added timeline playback controls: Jump to start (|◀), Play/Pause (▶/⏸), and 1x/2x speed toggle in the navigation bar below the sun arc; playback scrubs forward through the day automatically, showing panel history as it advances; stops at the current time for today or end of day for past dates
+- "Invert battery power direction" toggle is now hidden in Settings when no battery system is configured in the Energy Dashboard
+- Multiple batteries are now sorted alphabetically by name in the battery panel selector
+- Fixed placed panels changing shape (portrait/landscape) when the browser window is resized: the panel grid now uses CSS aspect-ratio so cells scale proportionally in both dimensions; previously column width was responsive but row height was fixed at 24px
+- Fixed drag-and-drop in the layout editor landing at the wrong position: panels now place so the point you clicked within the card aligns with the drop target, rather than the top-left corner always snapping to wherever you release
+- Fixed moon icon in the sun arc appearing as an ellipse at non-standard browser widths: the SVG viewBox stretches horizontally but the moon was drawn as a circle in SVG units, causing it to squash or stretch; it is now drawn as a compensated ellipse that renders circular at any window width
+
 ## v2026.05.6 - May 28, 2026
 
 - Fixed battery chart Today/Week/Month/Year buttons appearing as unstyled browser defaults instead of matching the UI

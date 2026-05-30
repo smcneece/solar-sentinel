@@ -235,7 +235,7 @@
     border-top: 1px solid var(--border);
     margin-top: 0.15rem;
   }
-  .arc-nav-left  { flex: 1; }
+  .arc-nav-left  { flex: 1; display: flex; align-items: center; gap: 0.35rem; }
   .arc-nav-center { display: flex; align-items: center; gap: 0.4rem; }
   .arc-nav-right  { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 0.4rem; }
   .arc-nav-btn {
@@ -251,6 +251,7 @@
   }
   .arc-nav-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
   .arc-nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .arc-nav-btn.active { border-color: var(--accent); color: var(--accent); }
   .arc-day-arrow { font-size: 1.2rem; padding: 0.05rem 0.5rem; }
   #date-picker {
     background: var(--surface2);
@@ -265,15 +266,14 @@
   #date-picker:focus { outline: none; border-color: var(--accent); }
   @media (prefers-color-scheme: light) { #date-picker { color-scheme: light; } }
   .slider-time {
-    font-size: 0.78rem;
+    font-size: 0.88rem;
     color: var(--text-muted);
-    min-width: 3.2rem;
-    text-align: right;
+    margin-left: 0.2rem;
     font-variant-numeric: tabular-nums;
   }
   .arc-live-btn {
-    font-size: 0.75rem;
-    padding: 0.2rem 0.6rem;
+    font-size: 0.82rem;
+    padding: 0.2rem 0.7rem;
     border-radius: 10px;
     background: rgba(67,160,71,0.12);
     border: 1px solid var(--border);
@@ -301,7 +301,7 @@
   /* Array production chart panel: floats in the right blank space beside the centered arc */
   .arc-chart-panel {
     position: absolute;
-    left: calc(75% + 0.5rem);
+    left: calc(75% - 0.25rem);
     right: 0.35rem;
     top: 0.25rem;
     bottom: 0.5rem;
@@ -317,7 +317,7 @@
   .arc-left-panel {
     position: absolute;
     left: 0.35rem;
-    right: calc(75% + 0.5rem);
+    right: calc(75% - 0.25rem);
     top: 0.25rem;
     bottom: 0.5rem;
     display: flex;

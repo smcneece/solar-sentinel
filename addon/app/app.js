@@ -114,9 +114,102 @@ function scheduleRefresh() {
   }, st.refreshInterval);
 }
 
+// ── Playback ──────────────────────────────────────────────────────────────
+
+function updatePlayBtn() {
+  const btn = document.getElementById('play-btn');
+  if (!btn) return;
+  btn.textContent = st.isPlaying ? '⏸' : '▶';
+  btn.title = st.isPlaying ? 'Pause' : 'Play';
+}
+
+function stopPlayback() {
+  if (!st.isPlaying) return;
+  st.isPlaying = false;
+  clearInterval(st.playbackTimer);
+  st.playbackTimer = null;
+  updatePlayBtn();
+}
+
+function playTick() {
+  const slider = document.getElementById('time-slider');
+  const dateStr = document.getElementById('date-picker').value || todayStr();
+  const isToday = dateStr === todayStr();
+  const maxVal = isToday ? currentMinutes() : 1440;
+  const step = 5;
+  let val = parseInt(slider.value) + step;
+  if (val >= maxVal) {
+    slider.value = maxVal;
+    stopPlayback();
+    onSliderInput();
+    return;
+  }
+  slider.value = val;
+  const h = Math.floor(val / 60), m = val % 60;
+  document.getElementById('slider-label').textContent =
+    `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  if (st.sunData) renderSunArc(st.sunData, sliderToTimestamp(val));
+  const history = st.historyCache[dateStr];
+  if (history) {
+    const [y, mo, d] = dateStr.split('-').map(Number);
+    const sliderTs = new Date(y, mo - 1, d, h, m).getTime();
+    let panels = applyHistoryToPanels(st.panels, history, sliderTs);
+    panels = recolorPanels(panels);
+    const online = panels.filter(p => p.status === 'online' && p.power_w > 0);
+    document.getElementById('total-power').textContent = fmtW(online.reduce((s, p) => s + p.power_w, 0));
+    renderPanels(panels);
+  } else {
+    onSliderInput();
+  }
+}
+
+function startPlayback() {
+  if (st.isPlaying) return;
+  const slider = document.getElementById('time-slider');
+  const dateStr = document.getElementById('date-picker').value || todayStr();
+  const isToday = dateStr === todayStr();
+  const maxVal = isToday ? currentMinutes() : 1440;
+  if (!st.sliderActive || parseInt(slider.value) >= maxVal - 5) {
+    slider.value = 0;
+    st.sliderActive = true;
+    _setLiveActive(false);
+    onSliderInput();
+  }
+  st.isPlaying = true;
+  updatePlayBtn();
+  st.playbackTimer = setInterval(playTick, st.playbackSpeed === 2 ? 50 : 100);
+}
+
+function togglePlay() {
+  if (st.isPlaying) stopPlayback(); else startPlayback();
+}
+
+function togglePlaySpeed() {
+  st.playbackSpeed = st.playbackSpeed === 1 ? 2 : 1;
+  const btn = document.getElementById('play-speed-btn');
+  if (btn) {
+    btn.textContent = st.playbackSpeed === 2 ? '2x' : '1x';
+    btn.classList.toggle('active', st.playbackSpeed === 2);
+  }
+  if (st.isPlaying) {
+    clearInterval(st.playbackTimer);
+    st.playbackTimer = setInterval(playTick, st.playbackSpeed === 2 ? 50 : 100);
+  }
+}
+
+function jumpToStart() {
+  stopPlayback();
+  const slider = document.getElementById('time-slider');
+  slider.value = 0;
+  st.sliderActive = true;
+  _setLiveActive(false);
+  onSliderInput();
+}
+
 // ── Slider and date picker ────────────────────────────────────────────────
 
 function onLive() {
+  stopPlayback();
   document.getElementById('date-picker').value = todayStr();
   st.sliderActive = false;
   st.historyCache = {};
@@ -193,6 +286,7 @@ async function onSliderInput() {
 }
 
 async function onDateChange(preserveSlider = false) {
+  stopPlayback();
   const dateStr = document.getElementById('date-picker').value;
   if (!dateStr) return;
   st.historyCache = {};
@@ -231,6 +325,7 @@ async function openAbout() {
 
 async function openSettings() {
   openModal('settings-modal');
+  document.getElementById('setting-invert-battery-row').style.display = st.batteryAvailable ? '' : 'none';
   try {
     const resp = await fetch(`${window.BASE}/api/settings`);
     if (!resp.ok) return;
@@ -375,7 +470,10 @@ async function init() {
   // Refresh panels on rename-clear event from panels.js
   document.addEventListener('solar:refresh-panels', fetchPanels);
 
-  document.getElementById('time-slider').addEventListener('input', onSliderInput);
+  document.getElementById('time-slider').addEventListener('input', () => { stopPlayback(); onSliderInput(); });
+  document.getElementById('play-jump-btn').addEventListener('click', jumpToStart);
+  document.getElementById('play-btn').addEventListener('click', togglePlay);
+  document.getElementById('play-speed-btn').addEventListener('click', togglePlaySpeed);
   document.getElementById('date-picker').addEventListener('change', onDateChange);
   document.getElementById('prev-day-btn').addEventListener('click', () => changeDay(-1));
   document.getElementById('next-day-btn').addEventListener('click', () => changeDay(1));
@@ -538,6 +636,8 @@ async function init() {
       if (st.batteryChartType === 'soc') drawBatterySocChart(st.lastBatteryPoints);
       else drawBatteryKwhChart(st.lastBatteryPoints);
     }
+    if (st.sunData) renderSunArc(st.sunData, st.sliderActive ? sliderToTimestamp(parseInt(document.getElementById('time-slider').value)) : null);
+    if (st.editMode) renderEditMode(st.panels);
   });
 
   scheduleRefresh();
