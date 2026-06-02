@@ -59,9 +59,26 @@ async function fetchSun() {
     st.sunData = await resp.json();
     const currentMs = st.sliderActive ? sliderToTimestamp(
       document.getElementById('time-slider').value) : null;
-    renderSunArc(st.sunData, currentMs);
+    renderSunArc(st.sunData, currentMs, st.weather);
   } catch (e) {
     console.error('fetchSun:', e);
+  }
+}
+
+async function fetchWeather() {
+  try {
+    const resp = await fetch(`${window.BASE}/api/weather`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    st.weather = (data.today || data.tomorrow) ? data : null;
+    if (st.sunData) {
+      const currentMs = st.sliderActive
+        ? sliderToTimestamp(parseInt(document.getElementById('time-slider').value))
+        : null;
+      renderSunArc(st.sunData, currentMs, st.weather);
+    }
+  } catch (e) {
+    console.error('fetchWeather:', e);
   }
 }
 
@@ -103,7 +120,7 @@ function scheduleRefresh() {
     await fetchPanels();
     if (!st.sliderActive) {
       updateSliderToNow();
-      if (st.sunData) renderSunArc(st.sunData, null);
+      if (st.sunData) renderSunArc(st.sunData, null, st.weather);
       if (st.chartRange === 'today') fetchArrayChart();
       if (st.batteryAvailable) {
         fetchBatteryStatus();
@@ -148,7 +165,7 @@ function playTick() {
   const h = Math.floor(val / 60), m = val % 60;
   document.getElementById('slider-label').textContent =
     `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-  if (st.sunData) renderSunArc(st.sunData, sliderToTimestamp(val));
+  if (st.sunData) renderSunArc(st.sunData, sliderToTimestamp(val), st.weather);
   const history = st.historyCache[dateStr];
   if (history) {
     const [y, mo, d] = dateStr.split('-').map(Number);
@@ -216,7 +233,7 @@ function onLive() {
   _setLiveActive(true);
   updateSliderToNow();
   renderPanels(st.panels);
-  if (st.sunData) renderSunArc(st.sunData, null);
+  if (st.sunData) renderSunArc(st.sunData, null, st.weather);
 }
 
 function onToday() {
@@ -254,7 +271,7 @@ async function onSliderInput() {
       _setLiveActive(true);
       updateSliderToNow();
       renderPanels(st.panels);
-      if (st.sunData) renderSunArc(st.sunData, null);
+      if (st.sunData) renderSunArc(st.sunData, null, st.weather);
       return;
     }
   }
@@ -266,7 +283,7 @@ async function onSliderInput() {
   const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
   label.textContent = timeStr;
 
-  renderSunArc(st.sunData, sliderToTimestamp(val));
+  renderSunArc(st.sunData, sliderToTimestamp(val), st.weather);
 
   const [y, mo, d] = dateStr.split('-').map(Number);
   const sliderTs = new Date(y, mo - 1, d, h, m).getTime();
@@ -464,6 +481,7 @@ async function init() {
   await fetchGrid();
   await fetchPanels();
   await fetchSun();
+  fetchWeather();
   if (st.batteryAvailable) await fetchBatteryStatus();
   updateSliderToNow();
 
@@ -592,6 +610,7 @@ async function init() {
   });
 
   setInterval(fetchSun, 5 * 60 * 1000);
+  setInterval(fetchWeather, 60 * 60 * 1000);
 
   document.querySelectorAll('.chart-tab').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -636,7 +655,7 @@ async function init() {
       if (st.batteryChartType === 'soc') drawBatterySocChart(st.lastBatteryPoints);
       else drawBatteryKwhChart(st.lastBatteryPoints);
     }
-    if (st.sunData) renderSunArc(st.sunData, st.sliderActive ? sliderToTimestamp(parseInt(document.getElementById('time-slider').value)) : null);
+    if (st.sunData) renderSunArc(st.sunData, st.sliderActive ? sliderToTimestamp(parseInt(document.getElementById('time-slider').value)) : null, st.weather);
     if (st.editMode) renderEditMode(st.panels);
   });
 

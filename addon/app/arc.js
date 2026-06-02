@@ -1,5 +1,35 @@
 import { fmtTime } from './utils.js';
 
+const CONDITION_EMOJI = {
+  'sunny':           '☀️',
+  'clear-night':     '🌙',
+  'partlycloudy':    '⛅',
+  'cloudy':          '☁️',
+  'fog':             '🌫️',
+  'rainy':           '🌧️',
+  'pouring':         '🌧️',
+  'lightning':       '⚡',
+  'lightning-rainy': '⛈️',
+  'snowy':           '❄️',
+  'snowy-rainy':     '🌨️',
+  'hail':            '🌨️',
+  'windy':           '💨',
+  'windy-variant':   '💨',
+  'exceptional':     '⚠️',
+};
+
+function weatherBlock(day, cx) {
+  if (!day) return '';
+  const emoji = CONDITION_EMOJI[day.condition] || '🌡️';
+  const tempStr = (day.low != null && day.high != null)
+    ? `${day.low}° / ${day.high}°`
+    : (day.high != null ? `${day.high}°` : (day.low != null ? `${day.low}°` : ''));
+  return `
+    <text x="${cx}" y="100" text-anchor="middle" font-size="13" fill="var(--arc-label)">${day.date}</text>
+    <text x="${cx}" y="130" text-anchor="middle" font-size="30">${emoji}</text>
+    <text x="${cx}" y="149" text-anchor="middle" font-size="12" fill="var(--arc-label)">${tempStr}</text>`;
+}
+
 function moonSvg(phase, cx, cy, rx, ry) {
   const lit  = 'rgba(230,218,165,0.95)';
   const dark = 'rgba(14,18,52,0.97)';
@@ -27,7 +57,7 @@ function moonSvg(phase, cx, cy, rx, ry) {
   return clip + base + edge;
 }
 
-export function renderSunArc(sun, currentMs) {
+export function renderSunArc(sun, currentMs, weather) {
   const svg = document.getElementById('sun-arc');
   if (!sun || !sun.dawn || !sun.dusk) return;
 
@@ -89,12 +119,22 @@ export function renderSunArc(sun, currentMs) {
   const twi1 = (sr && sr > dawn_ts) ? pathFill(dawn_ts, sr, 20) : '';
   const twi2 = (ss && dusk_ts > ss) ? pathFill(ss, dusk_ts, 20) : '';
 
+  // Compensation factor for SVG x-stretch: getBoundingClientRect gives actual rendered
+  // pixel width; clientWidth returns the viewBox width (800) which is wrong here.
+  const svgRenderedW = svg.getBoundingClientRect().width || W;
+  const svgCompX = (200 / H) * (W / svgRenderedW);
+
   const isDay = sr && ss && nowTs >= sr && nowTs <= ss;
   const aboveGround = nowTs >= dawn_ts && nowTs <= dusk_ts;
-  const sunIcon = aboveGround ? `
-    <circle cx="${tx(nowTs).toFixed(1)}" cy="${tyB(nowTs).toFixed(1)}" r="13"
+  let sunIcon = '';
+  if (aboveGround) {
+    const sunRy = 13;
+    const sunRx = parseFloat((sunRy * svgCompX).toFixed(2));
+    const scx = tx(nowTs).toFixed(1), scy = tyB(nowTs).toFixed(1);
+    sunIcon = `<ellipse cx="${scx}" cy="${scy}" rx="${sunRx}" ry="${sunRy}"
             fill="${isDay ? '#f5a623' : '#2a2a4a'}"
-            stroke="${isDay ? '#c8820a' : '#5555a0'}" stroke-width="1.5"/>` : '';
+            stroke="${isDay ? '#c8820a' : '#5555a0'}" stroke-width="1.5"/>`;
+  }
 
   let moonIcon = '';
   if (sun.moon_phase) {
@@ -102,11 +142,7 @@ export function renderSunArc(sun, currentMs) {
     const mx = tx(mTs).toFixed(1);
     const my = 52;
     const moonRy = 16;
-    // Compute rx to compensate for SVG x-stretch so the moon appears circular.
-    // getBoundingClientRect gives the actual rendered pixel width; clientWidth returns
-    // the SVG viewBox width (800) which is wrong here.
-    const svgRenderedW = svg.getBoundingClientRect().width || W;
-    const moonRx = parseFloat((moonRy * (200 / H) * (W / svgRenderedW)).toFixed(2));
+    const moonRx = parseFloat((moonRy * svgCompX).toFixed(2));
     moonIcon = moonSvg(sun.moon_phase, parseFloat(mx), my, moonRx, moonRy);
   }
 
@@ -141,6 +177,10 @@ export function renderSunArc(sun, currentMs) {
             text-anchor="${m.anchor}" font-size="12" fill="var(--arc-time)" font-weight="500">${fmtTime(m.ts)}</text>`;
   }).join('');
 
+  const weatherSvg = weather
+    ? weatherBlock(weather.today, 32) + weatherBlock(weather.tomorrow, 767)
+    : '';
+
   svg.innerHTML = `
     <rect width="${W}" height="${H}" fill="var(--arc-bg)"/>
     <path d="${preDawnFill}" fill="var(--arc-night)"/>
@@ -160,5 +200,6 @@ export function renderSunArc(sun, currentMs) {
     ${belowSvg}
     ${moonIcon}
     ${sunIcon}
+    ${weatherSvg}
   `;
 }

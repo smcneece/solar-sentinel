@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "2026.05.7"
+VERSION = "2026.06.1"
 
 _inverters: list = []        # discovered inverter descriptors
 _panels_cache: list = []     # latest computed panel states
@@ -994,6 +994,11 @@ async def handle_api_battery_chart(request):
     )
 
 
+async def handle_api_weather(request):
+    data = await ha_api.get_weather_forecast(_ha_tz)
+    return web.Response(text=json.dumps(data), content_type="application/json")
+
+
 async def handle_api_about(request):
     ha_version = await ha_api.get_ha_version()
     mode = "Docker" if os.environ.get("HA_BASE_URL") else "Supervisor"
@@ -1070,6 +1075,7 @@ def main():
     app.router.add_get("/api/grid_chart",         handle_api_grid_chart)
     app.router.add_get("/api/battery_status",     handle_api_battery_status)
     app.router.add_get("/api/battery_chart",      handle_api_battery_chart)
+    app.router.add_get("/api/weather",            handle_api_weather)
 
     port = int(os.environ.get("INGRESS_PORT", 8100))
     _LOGGER.info("Solar Sentinel v%s starting on port %d", VERSION, port)

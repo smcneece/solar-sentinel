@@ -5,6 +5,11 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.06.1 - June 1, 2026
+
+- Added today and tomorrow weather display in the margins of the sun arc: date, condition icon, and low/high temperature; silently skipped if no weather entity is configured in HA; tested with National Weather Service (NWS), Met.no, and Pirate Weather; NWS uses a day/night forecast format that is handled automatically; OpenWeatherMap free tier is not supported as it does not provide daily forecasts via the standard HA interface; if your integration is not working open a GitHub issue and support will be added as long as the weather API key is free
+- Fixed sun position marker on the arc appearing as an ellipse at non-standard browser widths; now uses a compensated ellipse that renders circular at any window size, matching the moon fix from v2026.05.7
+
 ## v2026.05.7 - May 29, 2026
 
 - Added timeline playback controls: Jump to start (|◀), Play/Pause (▶/⏸), and 1x/2x speed toggle in the navigation bar below the sun arc; playback scrubs forward through the day automatically, showing panel history as it advances; stops at the current time for today or end of day for past dates

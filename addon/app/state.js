@@ -45,4 +45,5 @@ export const st = {
   isPlaying: false,
   playbackSpeed: 1,
   playbackTimer: null,
+  weather: null,
 };

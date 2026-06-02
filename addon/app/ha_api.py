@@ -1215,6 +1215,158 @@ async def get_array_stats_chart(power_ids: list, kw_ids: set,
     return points
 
 
+# ── Weather forecast ─────────────────────────────────────────────────────
+
+async def get_weather_forecast(tz_name: str) -> dict:
+    """Fetch today and tomorrow forecasts from the first weather.* entity.
+
+    Tries forecast types in order: daily, twice_daily. Most integrations support
+    at least one. NWS only supports twice_daily (day/night periods); for that format
+    the daytime period provides condition and high temp, nighttime provides low temp.
+
+    Returns {"today": {...}, "tomorrow": {...}} or {} if unavailable or no entity found.
+    Each day: {"date": "M/D", "condition": str, "high": int|None, "low": int|None}."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{HA_API_URL}/states",
+                headers=_headers(),
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status != 200:
+                    return {}
+                all_states = await resp.json()
+    except Exception:
+        _LOGGER.exception("Failed to fetch states for weather discovery")
+        return {}
+
+    # Only consider entities with a live state; prefer non-hourly entities
+    weather_candidates = [
+        s["entity_id"] for s in all_states
+        if s["entity_id"].startswith("weather.")
+        and s.get("state") not in ("unavailable", "unknown", None)
+    ]
+    if not weather_candidates:
+        _LOGGER.debug("No live weather.* entities found; skipping weather display")
+        return {}
+
+    # Prefer entities without "hourly" in the name (e.g. weather.nws over weather.nws_hourly)
+    preferred = [e for e in weather_candidates if "hourly" not in e]
+    weather_eid = (preferred or weather_candidates)[0]
+    _LOGGER.info("Fetching forecast from weather entity: %s (candidates: %s)", weather_eid, weather_candidates)
+
+    try:
+        tz = zoneinfo.ZoneInfo(tz_name) if tz_name else datetime.timezone.utc
+    except Exception:
+        tz = datetime.timezone.utc
+
+    now = datetime.datetime.now(tz)
+    today_date = now.date()
+    tomorrow_date = today_date + datetime.timedelta(days=1)
+
+    token = _token()
+    forecasts = []
+    forecast_type_used = None
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.ws_connect(
+                _HA_WS_URL, timeout=aiohttp.ClientTimeout(total=20)
+            ) as ws:
+                msg = await asyncio.wait_for(ws.receive_json(), timeout=5)
+                if msg.get("type") != "auth_required":
+                    return {}
+                await ws.send_json({"type": "auth", "access_token": token})
+                msg = await asyncio.wait_for(ws.receive_json(), timeout=5)
+                if msg.get("type") != "auth_ok":
+                    return {}
+
+                # Try daily first; fall back to twice_daily if unsupported
+                for msg_id, fc_type in enumerate(("daily", "twice_daily"), start=1):
+                    await ws.send_json({
+                        "id": msg_id,
+                        "type": "call_service",
+                        "domain": "weather",
+                        "service": "get_forecasts",
+                        "service_data": {"type": fc_type},
+                        "target": {"entity_id": weather_eid},
+                        "return_response": True,
+                    })
+                    resp_msg = await asyncio.wait_for(ws.receive_json(), timeout=15)
+                    if resp_msg.get("success"):
+                        forecasts = (resp_msg.get("result", {}).get("response", {})
+                                     .get(weather_eid, {}).get("forecast", []))
+                        forecast_type_used = fc_type
+                        _LOGGER.info("Using %s forecast from %s", fc_type, weather_eid)
+                        break
+                    _LOGGER.debug("Forecast type '%s' not supported by %s, trying next", fc_type, weather_eid)
+    except Exception:
+        _LOGGER.exception("Failed to fetch weather forecast from %s", weather_eid)
+        return {}
+
+    if not forecasts or not forecast_type_used:
+        _LOGGER.warning("No usable forecast from %s (tried daily, twice_daily)", weather_eid)
+        return {}
+
+    def _fc_date(fc):
+        try:
+            return datetime.datetime.fromisoformat(
+                fc.get("datetime", "").replace("Z", "+00:00")).astimezone(tz).date()
+        except Exception:
+            return None
+
+    if forecast_type_used == "daily":
+        result = {}
+        for fc in forecasts:
+            fc_date = _fc_date(fc)
+            if fc_date is None:
+                continue
+            high = fc.get("temperature")
+            low = fc.get("templow")
+            entry = {
+                "date": f"{fc_date.month}/{fc_date.day}",
+                "condition": fc.get("condition", ""),
+                "high": round(high) if high is not None else None,
+                "low":  round(low)  if low  is not None else None,
+            }
+            if fc_date == today_date and "today" not in result:
+                result["today"] = entry
+            elif fc_date == tomorrow_date and "tomorrow" not in result:
+                result["tomorrow"] = entry
+            if "today" in result and "tomorrow" in result:
+                break
+
+    else:  # twice_daily: pair daytime and nighttime entries by date
+        by_date: dict = {}
+        for fc in forecasts:
+            fc_date = _fc_date(fc)
+            if fc_date is None:
+                continue
+            slot = "day" if fc.get("is_daytime", True) else "night"
+            by_date.setdefault(fc_date, {})[slot] = fc
+
+        result = {}
+        for target_date, label in ((today_date, "today"), (tomorrow_date, "tomorrow")):
+            day_fc = by_date.get(target_date, {}).get("day")
+            night_fc = by_date.get(target_date, {}).get("night")
+            main_fc = day_fc or night_fc
+            if not main_fc:
+                continue
+            high = day_fc.get("temperature") if day_fc else None
+            low = night_fc.get("temperature") if night_fc else None
+            result[label] = {
+                "date": f"{target_date.month}/{target_date.day}",
+                "condition": (day_fc or night_fc).get("condition", ""),
+                "high": round(high) if high is not None else None,
+                "low":  round(low)  if low  is not None else None,
+            }
+
+    _LOGGER.info("Weather: today=%s, tomorrow=%s",
+                 result.get("today", {}).get("condition"),
+                 result.get("tomorrow", {}).get("condition"))
+    return result
+
+
 # ── Battery / debug discovery ────────────────────────────────────────────
 
 async def get_debug_info() -> dict:
