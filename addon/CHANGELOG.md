@@ -5,6 +5,18 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.06.2 - TBD
+
+- Fixed "Last Reported" in the panel detail modal showing a relative duration (e.g. "5 days ago") calculated against the current clock, which was misleading when viewing historical data; it now shows the actual timestamp (e.g. 6/2/2026 11:49 AM) in both live and historical modes
+- Added "Show W unit on panels" toggle in Settings; when disabled, panel cards show just the number without the unit suffix, which saves space on small screens
+- Fixed time slider position not matching the sun ball position on the arc: the slider now spans only the visible arc window (pre-dawn to post-dusk) instead of the full 24-hour day, so the slider handle tracks directly with the sun ball; jump-to-start and playback also begin at dawn instead of midnight
+- Fixed layout editor drag-and-drop always placing panels by their top-left corner regardless of where on the card you clicked; the drag ghost image now anchors to the top-left as well so it is clear where the panel will land
+- Fixed drop target highlight in the layout editor being nearly invisible against the warm orange panel colors; changed to a bright blue outline that is clearly visible at any panel brightness
+- Updated layout editor instructions to explain the top-left corner placement behavior; increased instruction text size for readability
+- Improved sun arc time markers: Dawn and Dusk now have a solid tick that straddles the horizon line, pointing up into the arc and down to the label, making it clear where each event falls on the timeline; labels are centered under their tick; Sunrise and Sunset reference lines are now solid and extend from the label text all the way down to the horizon instead of starting at the arc point
+- Fixed battery operating mode displaying in ALL CAPS; mode strings are now converted to title case ("SELF_CONSUMPTION" becomes "Self Consumption") for readability across all battery integrations; added a small "(operating)" label with a tooltip clarifying this is the current firmware state, not the configured Battery Control Mode
+- Added 0.5x playback speed to the timeline controls; speed button now cycles 0.5x, 1x, 2x and defaults to 0.5x for a slower initial scrub
+
 ## v2026.06.1 - June 1, 2026
 
 - Added today and tomorrow weather display in the margins of the sun arc: date, condition icon, and low/high temperature; silently skipped if no weather entity is configured in HA; tested with National Weather Service (NWS), Met.no, and Pirate Weather; NWS uses a day/night forecast format that is handled automatically; OpenWeatherMap free tier is not supported as it does not provide daily forecasts via the standard HA interface; if your integration is not working open a GitHub issue and support will be added as long as the weather API key is free

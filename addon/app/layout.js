@@ -121,7 +121,7 @@ export function renderEditMode(panels) {
 
   const hint = document.createElement('div');
   hint.className = 'edit-hint';
-  hint.textContent = 'Double-click a panel to rotate landscape/portrait. Use + Label to add section headers; drag to position, click to edit text.';
+  hint.textContent = 'Panels snap by their top-left corner: drag a panel and the cell under the top-left corner is where it will land. Double-click to rotate landscape/portrait. Use + Label to add section headers.';
   wrapper.appendChild(hint);
 
   const grid = document.createElement('div');
@@ -169,10 +169,9 @@ export function renderEditMode(panels) {
     card.dataset.row = fr;
     card.dataset.col = fc;
     card.addEventListener('dragstart', (e) => {
-      const w = card.offsetWidth || 1;
-      const h = card.offsetHeight || 1;
-      st.dragOffsetCol = Math.min(spanCols - 1, Math.max(0, Math.floor(e.offsetX / w * spanCols)));
-      st.dragOffsetRow = Math.min(spanRows - 1, Math.max(0, Math.floor(e.offsetY / h * spanRows)));
+      st.dragOffsetCol = 0;
+      st.dragOffsetRow = 0;
+      e.dataTransfer.setDragImage(card, 0, 0);
       setTimeout(() => renderEditMode(st.panels), 0);
     });
     card.addEventListener('dragend', () => renderEditMode(st.panels));
@@ -328,11 +327,9 @@ export function renderEditMode(panels) {
   for (const p of unplaced) {
     const bc = makePanelCard(p, true);
     bc.addEventListener('dragstart', (e) => {
-      const [sc, sr] = getSpan(p.entity_id, {[p.entity_id]: st.bankDefaultRotation});
-      const w = bc.offsetWidth || 1;
-      const h = bc.offsetHeight || 1;
-      st.dragOffsetCol = Math.min(sc - 1, Math.max(0, Math.floor(e.offsetX / w * sc)));
-      st.dragOffsetRow = Math.min(sr - 1, Math.max(0, Math.floor(e.offsetY / h * sr)));
+      st.dragOffsetCol = 0;
+      st.dragOffsetRow = 0;
+      e.dataTransfer.setDragImage(bc, 0, 0);
     });
     bc.addEventListener('dragend', () => renderEditMode(st.panels));
     tray.appendChild(bc);

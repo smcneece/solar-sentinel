@@ -71,7 +71,7 @@
       </div>
       <div class="battery-status-row">
         <span class="battery-stat-power" id="battery-power-label">--</span>
-        <span class="battery-stat-mode" id="battery-mode-label"></span>
+        <span class="battery-stat-mode" id="battery-mode-label"></span><span class="battery-stat-mode-hint" title="Current operating state reported by the battery firmware. This may differ from your configured Battery Control Mode in HA."> (operating)</span>
       </div>
       <div class="battery-status-row" style="border-bottom:none">
         <span class="battery-stat-today" id="battery-today-label">-- in / -- out kWh</span>
@@ -105,7 +105,7 @@
       <div class="arc-nav-left">
         <button class="arc-nav-btn" id="play-jump-btn" title="Jump to start of day">|&#9664;</button>
         <button class="arc-nav-btn" id="play-btn" title="Play">&#9654;</button>
-        <button class="arc-nav-btn" id="play-speed-btn" title="Playback speed">1x</button>
+        <button class="arc-nav-btn" id="play-speed-btn" title="Playback speed">0.5x</button>
         <span class="slider-time" id="slider-label">Now</span>
       </div>
       <div class="arc-nav-center">
@@ -190,6 +190,13 @@
       <label for="setting-show-panel-names">Show panel names on panels</label>
       <label class="toggle-switch">
         <input type="checkbox" id="setting-show-panel-names" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="settings-row">
+      <label for="setting-show-panel-unit">Show W unit on panels</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="setting-show-panel-unit" checked>
         <span class="toggle-slider"></span>
       </label>
     </div>

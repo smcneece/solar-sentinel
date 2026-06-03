@@ -19,7 +19,10 @@ export function makePanelCard(p, isDraggable) {
 
   const power = document.createElement('div');
   power.className = 'panel-power';
-  power.textContent = p.status === 'online' ? fmtW(p.power_w) : '--';
+  const rawPower = p.status === 'online' ? fmtW(p.power_w) : '--';
+  power.textContent = (p.status === 'online' && !st.showPanelUnit)
+    ? rawPower.replace(/ (W|kW)$/, '')
+    : rawPower;
 
   if (isDraggable || st.showPanelNames) {
     const name = document.createElement('div');
@@ -260,11 +263,10 @@ export function renderPanelDetails(sensors) {
 export function fmtDetailValue(s) {
   if (s.device_class === 'timestamp') {
     try {
-      const diff = Math.round((Date.now() - new Date(s.value).getTime()) / 60000);
-      if (diff < 2) return 'just now';
-      if (diff < 60) return `${diff} min ago`;
-      if (diff < 1440) return `${Math.round(diff / 60)} hr ago`;
-      return `${Math.round(diff / 1440)} days ago`;
+      const d = new Date(s.value);
+      const date = d.toLocaleDateString([], {month: 'numeric', day: 'numeric', year: 'numeric'});
+      const time = d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+      return `${date} ${time}`;
     } catch { return s.value; }
   }
   const v = s.value;

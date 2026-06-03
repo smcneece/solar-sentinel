@@ -1,7 +1,7 @@
 name: Solar Sentinel
 description: Visualize your solar panel array with live per-panel power and historical time-slider
 url: https://github.com/smcneece/solar-sentinel
-version: "2026.06.1"
+version: "2026.06.2"
 slug: solar_sentinel
 init: false
 arch:

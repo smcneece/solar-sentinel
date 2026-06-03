@@ -405,12 +405,17 @@
   .battery-stat-mode {
     font-size: 0.68rem;
     color: var(--text-dim);
-    text-transform: uppercase;
     letter-spacing: 0.04em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     text-align: right;
+  }
+  .battery-stat-mode-hint {
+    font-size: 0.62rem;
+    color: var(--text-dim);
+    opacity: 0.6;
+    cursor: help;
   }
   .battery-stat-today {
     font-size: 0.75rem;
@@ -723,7 +728,8 @@
     outline: 1px solid rgba(120,120,120,0.28);
     outline-offset: -1px;
   }
-  .pgp-cell.drag-over { background: rgba(245,166,35,0.10); border-color: var(--accent) !important; border-style: solid !important; }
+  .pgp-cell.drag-over,
+  .panel-cell.drag-over { outline: 3px solid #4fc3f7 !important; outline-offset: -3px; background: rgba(79,195,247,0.18) !important; border-color: transparent !important; }
   .panel-grid-pos .panel-cell { min-width: 0; overflow: hidden; }
 
   /* Grid edit toolbar */
@@ -759,7 +765,7 @@
     font-variant-numeric: tabular-nums;
   }
   .edit-hint {
-    font-size: 0.72rem;
+    font-size: 0.85rem;
     color: var(--text-muted);
     font-style: italic;
     padding-bottom: 0.5rem;

@@ -22,6 +22,18 @@ function updateSliderToNow() {
     `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
 }
 
+function sunArcMinutes() {
+  const sun = st.sunData;
+  if (!sun || !sun.dawn || !sun.dusk) return [0, 1440];
+  const dayRange = sun.dusk - sun.dawn;
+  const ext = dayRange * 0.16;
+  const toMin = ts => { const d = new Date(ts * 1000); return d.getHours() * 60 + d.getMinutes(); };
+  return [
+    Math.max(0,    Math.floor(toMin(sun.dawn - ext))),
+    Math.min(1440, Math.ceil(toMin(sun.dusk  + ext))),
+  ];
+}
+
 function _setLiveActive(isLive) {
   document.getElementById('live-btn').classList.toggle('active', isLive);
   document.getElementById('next-day-btn').disabled =
@@ -57,8 +69,11 @@ async function fetchSun() {
     const resp = await fetch(`${window.BASE}/api/sun`);
     if (!resp.ok) return;
     st.sunData = await resp.json();
-    const currentMs = st.sliderActive ? sliderToTimestamp(
-      document.getElementById('time-slider').value) : null;
+    const [arcMin, arcMax] = sunArcMinutes();
+    const slider = document.getElementById('time-slider');
+    slider.min = arcMin;
+    slider.max = arcMax;
+    const currentMs = st.sliderActive ? sliderToTimestamp(slider.value) : null;
     renderSunArc(st.sunData, currentMs, st.weather);
   } catch (e) {
     console.error('fetchSun:', e);
@@ -106,6 +121,7 @@ async function fetchSettings() {
     st.showGridChart = s.show_grid_chart !== false;
     st.nameStrip = (s.name_strip || '').split(',').map(x => x.trim()).filter(Boolean);
     st.showPanelNames = s.show_panel_names !== false;
+    st.showPanelUnit = s.show_panel_unit !== false;
     st.minAvgW = s.min_avg_w ?? 5;
     st.invertBatteryPower = s.invert_battery_power === true;
     applyLeftPanelVisibility();
@@ -152,7 +168,7 @@ function playTick() {
   const slider = document.getElementById('time-slider');
   const dateStr = document.getElementById('date-picker').value || todayStr();
   const isToday = dateStr === todayStr();
-  const maxVal = isToday ? currentMinutes() : 1440;
+  const maxVal = isToday ? currentMinutes() : parseInt(slider.max);
   const step = 5;
   let val = parseInt(slider.value) + step;
   if (val >= maxVal) {
@@ -185,39 +201,47 @@ function startPlayback() {
   const slider = document.getElementById('time-slider');
   const dateStr = document.getElementById('date-picker').value || todayStr();
   const isToday = dateStr === todayStr();
-  const maxVal = isToday ? currentMinutes() : 1440;
+  const maxVal = isToday ? currentMinutes() : parseInt(slider.max);
   if (!st.sliderActive || parseInt(slider.value) >= maxVal - 5) {
-    slider.value = 0;
+    slider.value = slider.min;
     st.sliderActive = true;
     _setLiveActive(false);
     onSliderInput();
   }
   st.isPlaying = true;
   updatePlayBtn();
-  st.playbackTimer = setInterval(playTick, st.playbackSpeed === 2 ? 50 : 100);
+  st.playbackTimer = setInterval(playTick, playInterval());
 }
 
 function togglePlay() {
   if (st.isPlaying) stopPlayback(); else startPlayback();
 }
 
+function playInterval() {
+  return st.playbackSpeed === 2 ? 50 : st.playbackSpeed === 1 ? 100 : 200;
+}
+
+function speedLabel() {
+  return st.playbackSpeed === 2 ? '2x' : st.playbackSpeed === 1 ? '1x' : '0.5x';
+}
+
 function togglePlaySpeed() {
-  st.playbackSpeed = st.playbackSpeed === 1 ? 2 : 1;
+  st.playbackSpeed = st.playbackSpeed === 0.5 ? 1 : st.playbackSpeed === 1 ? 2 : 0.5;
   const btn = document.getElementById('play-speed-btn');
   if (btn) {
-    btn.textContent = st.playbackSpeed === 2 ? '2x' : '1x';
+    btn.textContent = speedLabel();
     btn.classList.toggle('active', st.playbackSpeed === 2);
   }
   if (st.isPlaying) {
     clearInterval(st.playbackTimer);
-    st.playbackTimer = setInterval(playTick, st.playbackSpeed === 2 ? 50 : 100);
+    st.playbackTimer = setInterval(playTick, playInterval());
   }
 }
 
 function jumpToStart() {
   stopPlayback();
   const slider = document.getElementById('time-slider');
-  slider.value = 0;
+  slider.value = slider.min;
   st.sliderActive = true;
   _setLiveActive(false);
   onSliderInput();
@@ -309,12 +333,7 @@ async function onDateChange(preserveSlider = false) {
   st.historyCache = {};
   const slider = document.getElementById('time-slider');
   if (dateStr !== todayStr() && !preserveSlider) {
-    let dawnMin = 360;
-    if (st.sunData && st.sunData.dawn) {
-      const dd = new Date(st.sunData.dawn * 1000);
-      dawnMin = dd.getHours() * 60 + dd.getMinutes();
-    }
-    slider.value = dawnMin;
+    slider.value = slider.min;
   }
   st.sliderActive = true;
   _setLiveActive(false);
@@ -351,6 +370,7 @@ async function openSettings() {
     document.getElementById('setting-min-avg-w').value = s.min_avg_w ?? 5;
     document.getElementById('setting-show-grid').checked = s.show_grid_chart !== false;
     document.getElementById('setting-show-panel-names').checked = s.show_panel_names !== false;
+    document.getElementById('setting-show-panel-unit').checked = s.show_panel_unit !== false;
     document.getElementById('setting-invert-battery').checked = s.invert_battery_power === true;
     document.getElementById('setting-name-strip').value = s.name_strip || '';
   } catch (e) { console.error('openSettings:', e); }
@@ -368,6 +388,7 @@ async function saveSettings() {
         min_avg_w: Math.max(0, parseInt(document.getElementById('setting-min-avg-w').value) || 0),
         show_grid_chart: showGrid,
         show_panel_names: document.getElementById('setting-show-panel-names').checked,
+        show_panel_unit: document.getElementById('setting-show-panel-unit').checked,
         invert_battery_power: document.getElementById('setting-invert-battery').checked,
         name_strip: document.getElementById('setting-name-strip').value.trim(),
       }),
@@ -377,6 +398,7 @@ async function saveSettings() {
     st.nameStrip = (document.getElementById('setting-name-strip').value.trim())
       .split(',').map(x => x.trim()).filter(Boolean);
     st.showPanelNames = document.getElementById('setting-show-panel-names').checked;
+    st.showPanelUnit = document.getElementById('setting-show-panel-unit').checked;
     st.invertBatteryPower = document.getElementById('setting-invert-battery').checked;
     st.minAvgW = Math.max(0, parseInt(document.getElementById('setting-min-avg-w').value) || 0);
     applyLeftPanelVisibility();
@@ -443,7 +465,11 @@ function updateBatteryStatusDisplay(bat) {
   }
 
   const modeEl = document.getElementById('battery-mode-label');
-  if (modeEl) modeEl.textContent = bat.mode ? bat.mode.replace(/_/g, ' ') : '';
+  if (modeEl) {
+    const raw = bat.mode || '';
+    const friendly = raw.replace(/[_-]/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    modeEl.textContent = friendly;
+  }
 
   const todayEl = document.getElementById('battery-today-label');
   if (todayEl) {

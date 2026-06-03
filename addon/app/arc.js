@@ -152,8 +152,8 @@ export function renderSunArc(sun, currentMs, weather) {
     const timeY  = Math.max(22, arcY - 38);
     const labelY = Math.max(8,  timeY  - 15);
     return `
-      <line x1="${x.toFixed(1)}" y1="${(arcY + 1).toFixed(1)}" x2="${x.toFixed(1)}" y2="${HORIZON}"
-            stroke="var(--arc-marker)" stroke-width="0.8" stroke-dasharray="3,4"/>
+      <line x1="${x.toFixed(1)}" y1="${labelY.toFixed(1)}" x2="${x.toFixed(1)}" y2="${HORIZON}"
+            stroke="var(--arc-marker)" stroke-width="0.8"/>
       <text x="${x.toFixed(1)}" y="${labelY.toFixed(1)}"
             text-anchor="middle" font-size="10" fill="var(--arc-label)">${label}</text>
       <text x="${x.toFixed(1)}" y="${timeY.toFixed(1)}"
@@ -161,19 +161,24 @@ export function renderSunArc(sun, currentMs, weather) {
   }
 
   const belowMarkers = [
-    {ts: dawn_ts,        label: 'Dawn',       anchor: 'start',  xOff:  3},
-    {ts: sun.solar_noon, label: 'Solar noon', anchor: 'middle', xOff:  0},
-    {ts: dusk_ts,        label: 'Dusk',       anchor: 'end',    xOff: -3},
+    {ts: dawn_ts,        label: 'Dawn',       anchor: 'middle', xOff: 0, tickAbove: true},
+    {ts: sun.solar_noon, label: 'Solar noon', anchor: 'middle', xOff: 0, tickAbove: false},
+    {ts: dusk_ts,        label: 'Dusk',       anchor: 'middle', xOff: 0, tickAbove: true},
   ].filter(m => m.ts);
 
   const belowSvg = belowMarkers.map(m => {
     const x = tx(m.ts);
+    const tickTop    = m.tickAbove ? HORIZON - 12 : HORIZON;
+    const tickBottom = m.tickAbove ? HORIZON + 17 : HORIZON + 7;
+    const strokeW    = m.tickAbove ? '0.8' : '0.5';
+    const labelY     = m.tickAbove ? HORIZON + 28 : HORIZON + 14;
+    const timeY      = m.tickAbove ? HORIZON + 42 : HORIZON + 27;
     return `
-      <line x1="${x.toFixed(1)}" y1="${HORIZON}" x2="${x.toFixed(1)}" y2="${(HORIZON + 7).toFixed(1)}"
-            stroke="var(--arc-marker)" stroke-width="0.5"/>
-      <text x="${(x + m.xOff).toFixed(1)}" y="${(HORIZON + 14).toFixed(1)}"
+      <line x1="${x.toFixed(1)}" y1="${tickTop}" x2="${x.toFixed(1)}" y2="${tickBottom}"
+            stroke="var(--arc-marker)" stroke-width="${strokeW}"/>
+      <text x="${(x + m.xOff).toFixed(1)}" y="${labelY}"
             text-anchor="${m.anchor}" font-size="10" fill="var(--arc-label)">${m.label}</text>
-      <text x="${(x + m.xOff).toFixed(1)}" y="${(HORIZON + 27).toFixed(1)}"
+      <text x="${(x + m.xOff).toFixed(1)}" y="${timeY}"
             text-anchor="${m.anchor}" font-size="12" fill="var(--arc-time)" font-weight="500">${fmtTime(m.ts)}</text>`;
   }).join('');
 

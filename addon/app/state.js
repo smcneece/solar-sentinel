@@ -40,10 +40,11 @@ export const st = {
   bankDefaultRotation: 0,
   nameStrip: [],
   showPanelNames: true,
+  showPanelUnit: true,
   minAvgW: 5,
   invertBatteryPower: false,
   isPlaying: false,
-  playbackSpeed: 1,
+  playbackSpeed: 0.5,
   playbackTimer: null,
   weather: null,
 };
