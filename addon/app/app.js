@@ -26,12 +26,12 @@ function sunArcMinutes() {
   const sun = st.sunData;
   if (!sun || !sun.dawn || !sun.dusk) return [0, 1440];
   const dayRange = sun.dusk - sun.dawn;
-  const ext = dayRange * 0.16;
+  const extMin = Math.round((dayRange * 0.16) / 60);
   const toMin = ts => { const d = new Date(ts * 1000); return d.getHours() * 60 + d.getMinutes(); };
-  return [
-    Math.max(0,    Math.floor(toMin(sun.dawn - ext))),
-    Math.min(1440, Math.ceil(toMin(sun.dusk  + ext))),
-  ];
+  const arcMin = Math.max(0,    toMin(sun.dawn) - extMin);
+  const arcMax = Math.min(1440, toMin(sun.dusk)  + extMin);
+  if (arcMin >= arcMax) return [0, 1440];
+  return [arcMin, arcMax];
 }
 
 function _setLiveActive(isLive) {
