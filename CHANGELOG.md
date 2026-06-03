@@ -5,7 +5,7 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
-## v2026.06.2 - TBD
+## v2026.06.2 - June 2, 2026
 
 - Fixed "Last Reported" in the panel detail modal showing a relative duration (e.g. "5 days ago") calculated against the current clock, which was misleading when viewing historical data; it now shows the actual timestamp (e.g. 6/2/2026 11:49 AM) in both live and historical modes
 - Added "Show W unit on panels" toggle in Settings; when disabled, panel cards show just the number without the unit suffix, which saves space on small screens
