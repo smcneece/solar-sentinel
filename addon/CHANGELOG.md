@@ -5,6 +5,10 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.06.3 - June 3, 2026
+
+- Fixed time slider broken (stuck, unresponsive, play does nothing) for users with long summer days where dusk falls late enough that the pre/post-dusk arc extension crosses midnight; most likely to affect users at higher latitudes (New York and further north) in summer months; the slider range calculation now adds the extension in minutes directly instead of converting a potentially next-day timestamp to local time
+
 ## v2026.06.2 - June 2, 2026
 
 - Fixed "Last Reported" in the panel detail modal showing a relative duration (e.g. "5 days ago") calculated against the current clock, which was misleading when viewing historical data; it now shows the actual timestamp (e.g. 6/2/2026 11:49 AM) in both live and historical modes
@@ -16,7 +20,6 @@ For full release notes and details on each version, see the [GitHub Releases pag
 - Improved sun arc time markers: Dawn and Dusk now have a solid tick that straddles the horizon line, pointing up into the arc and down to the label, making it clear where each event falls on the timeline; labels are centered under their tick; Sunrise and Sunset reference lines are now solid and extend from the label text all the way down to the horizon instead of starting at the arc point
 - Fixed battery operating mode displaying in ALL CAPS; mode strings are now converted to title case ("SELF_CONSUMPTION" becomes "Self Consumption") for readability across all battery integrations; added a small "(operating)" label with a tooltip clarifying this is the current firmware state, not the configured Battery Control Mode
 - Added 0.5x playback speed to the timeline controls; speed button now cycles 0.5x, 1x, 2x and defaults to 0.5x for a slower initial scrub
-- Fixed time slider broken (stuck, unresponsive, play does nothing) for users with long summer days where dusk falls late enough that the pre/post-dusk arc extension crosses midnight; the slider range calculation now adds the extension in minutes directly instead of converting a potentially next-day timestamp to local time
 
 ## v2026.06.1 - June 1, 2026
 
