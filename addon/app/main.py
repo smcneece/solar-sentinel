@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "2026.06.4"
+VERSION = "2026.06.5"
 
 _inverters: list = []        # discovered inverter descriptors
 _panels_cache: list = []     # latest computed panel states
@@ -35,8 +35,9 @@ _fast_retry_count: int = 0   # consecutive all-unavailable refreshes; drives pos
 
 # ── Color coding ─────────────────────────────────────────────────────────
 
-_MIN_AVG_W = 5.0       # default; overridden by settings min_avg_w
-_WARM_THRESHOLD = 150.0  # avg W at which colors reach full intensity
+_MIN_AVG_W = 5.0        # default; overridden by settings min_avg_w
+_WARM_THRESHOLD = 150.0  # fallback when peak_panel_w is 0
+_PEAK_EFFICIENCY = 0.95  # real-world panels rarely hit STC rating; full orange at 95% of rated W
 
 def _gradient_color(t: float) -> str:
     """t in 0..1: pale yellow at 0, dark orange at 1."""
@@ -46,13 +47,17 @@ def _gradient_color(t: float) -> str:
     lit = round(82 - t * 34)
     return f"hsl({hue},{sat}%,{lit}%)"
 
-def _compute_color(power_w: float, avg_w: float, status: str) -> str:
+def _compute_color(power_w: float, avg_w: float, status: str, peak_w: float = 0.0) -> str:
     if status != "online":
         return "gray"
     if avg_w < _MIN_AVG_W:
         return "gray"
-    scale = min(1.0, avg_w / _WARM_THRESHOLD)
-    return _gradient_color((power_w / avg_w) * scale)
+    if peak_w > 0:
+        t = min(1.0, power_w / (peak_w * _PEAK_EFFICIENCY))
+    else:
+        scale = min(1.0, avg_w / _WARM_THRESHOLD)
+        t = (power_w / avg_w) * scale
+    return _gradient_color(t)
 
 
 # ── Refresh loop ─────────────────────────────────────────────────────────
@@ -124,7 +129,9 @@ async def do_refresh() -> bool:
 
     # Suppress stale cached readings (e.g. SunPower holds last value after dusk).
     # When the array average is below the minimum meaningful threshold, zero everything out.
-    min_avg_w = float(storage.get_settings().get("min_avg_w", _MIN_AVG_W))
+    settings = storage.get_settings()
+    min_avg_w = float(settings.get("min_avg_w", _MIN_AVG_W))
+    peak_panel_w = float(settings.get("peak_panel_w", 300))
     if avg_w < min_avg_w:
         for p in panels:
             p["power_w"] = 0.0
@@ -132,7 +139,7 @@ async def do_refresh() -> bool:
         total_w = 0.0
 
     for p in panels:
-        p["color"] = _compute_color(p["power_w"], avg_w, p["status"])
+        p["color"] = _compute_color(p["power_w"], avg_w, p["status"], peak_panel_w)
 
     _panels_cache = panels
     all_unavailable = bool(panels) and all(p["status"] == "unavailable" for p in panels)

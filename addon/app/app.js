@@ -131,9 +131,20 @@ async function fetchSettings() {
 
 // ── Refresh loop ──────────────────────────────────────────────────────────
 
+let _lastRefreshMs = Date.now();
+
+function updateCountdown() {
+  const el = document.getElementById('refresh-countdown');
+  if (!el) return;
+  if (st.sliderActive) { el.textContent = ''; return; }
+  const remaining = Math.max(0, Math.ceil((st.refreshInterval - (Date.now() - _lastRefreshMs)) / 1000));
+  el.textContent = remaining + 's';
+}
+
 function scheduleRefresh() {
   if (st.refreshTimer) clearTimeout(st.refreshTimer);
   st.refreshTimer = setTimeout(async () => {
+    _lastRefreshMs = Date.now();
     await fetchPanels();
     if (!st.sliderActive) {
       updateSliderToNow();
@@ -373,6 +384,7 @@ async function openSettings() {
     const s = await resp.json();
     document.getElementById('setting-interval').value = s.refresh_interval || 30;
     document.getElementById('setting-min-avg-w').value = s.min_avg_w ?? 5;
+    document.getElementById('setting-peak-panel-w').value = s.peak_panel_w ?? 300;
     document.getElementById('setting-show-grid').checked = s.show_grid_chart !== false;
     document.getElementById('setting-show-panel-names').checked = s.show_panel_names !== false;
     document.getElementById('setting-show-panel-unit').checked = s.show_panel_unit !== false;
@@ -391,6 +403,7 @@ async function saveSettings() {
       body: JSON.stringify({
         refresh_interval: interval,
         min_avg_w: Math.max(0, parseInt(document.getElementById('setting-min-avg-w').value) || 0),
+        peak_panel_w: Math.max(0, parseInt(document.getElementById('setting-peak-panel-w').value) || 0),
         show_grid_chart: showGrid,
         show_panel_names: document.getElementById('setting-show-panel-names').checked,
         show_panel_unit: document.getElementById('setting-show-panel-unit').checked,
@@ -695,6 +708,7 @@ async function init() {
   });
 
   scheduleRefresh();
+  setInterval(updateCountdown, 1000);
 }
 
 document.addEventListener('DOMContentLoaded', init);

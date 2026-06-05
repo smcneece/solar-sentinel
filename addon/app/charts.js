@@ -178,6 +178,96 @@ export function drawGridChart(points, hasExport) {
 
   ctx.clearRect(0, 0, W, H);
 
+  if (st.gridChartRange === 'today' && points[0]?.ts_ms) {
+    const d0 = new Date(points[0].ts_ms);
+    d0.setHours(0, 0, 0, 0);
+    const dayStartMs = d0.getTime(), dayMs = 86400 * 1000;
+    const toX  = ts  => padL + ((ts - dayStartMs) / dayMs) * chartW;
+    const toY  = kwh => zeroY - (kwh / maxPos) * posH;
+
+    // Trim trailing zero points so curves end at last data point
+    const lastNonZero = points.reduce((acc, p, i) =>
+      ((p.import_kwh || 0) + (p.consumed_solar_kwh || 0) + (p.export_kwh || 0)) > 0 ? i : acc, -1);
+    const drawPts = lastNonZero >= 0 ? points.slice(0, lastNonZero + 1) : points;
+
+    if (hasExport && maxNeg > 0.001) {
+      // Total (import + solar consumed) in orange, import in blue on top; exposed orange = solar consumed
+      const gradOrange = ctx.createLinearGradient(0, padT, 0, zeroY);
+      gradOrange.addColorStop(0, 'rgba(212, 136, 42, 0.30)');
+      gradOrange.addColorStop(1, 'rgba(212, 136, 42, 0.02)');
+      ctx.beginPath();
+      ctx.moveTo(toX(drawPts[0].ts_ms), zeroY);
+      drawPts.forEach(p => ctx.lineTo(toX(p.ts_ms), toY((p.import_kwh || 0) + (p.consumed_solar_kwh || 0))));
+      ctx.lineTo(toX(drawPts[drawPts.length - 1].ts_ms), zeroY);
+      ctx.closePath(); ctx.fillStyle = gradOrange; ctx.fill();
+
+      const gradBlue = ctx.createLinearGradient(0, padT, 0, zeroY);
+      gradBlue.addColorStop(0, 'rgba(91, 142, 230, 0.45)');
+      gradBlue.addColorStop(1, 'rgba(91, 142, 230, 0.02)');
+      ctx.beginPath();
+      ctx.moveTo(toX(drawPts[0].ts_ms), zeroY);
+      drawPts.forEach(p => ctx.lineTo(toX(p.ts_ms), toY(p.import_kwh || 0)));
+      ctx.lineTo(toX(drawPts[drawPts.length - 1].ts_ms), zeroY);
+      ctx.closePath(); ctx.fillStyle = gradBlue; ctx.fill();
+
+      ctx.beginPath();
+      let f = true;
+      drawPts.forEach(p => { const x = toX(p.ts_ms), y = toY((p.import_kwh||0)+(p.consumed_solar_kwh||0)); f ? ctx.moveTo(x,y) : ctx.lineTo(x,y); f=false; });
+      ctx.strokeStyle = '#d4882a'; ctx.lineWidth = 1; ctx.setLineDash([]); ctx.stroke();
+
+      ctx.beginPath(); f = true;
+      drawPts.forEach(p => { const x = toX(p.ts_ms), y = toY(p.import_kwh||0); f ? ctx.moveTo(x,y) : ctx.lineTo(x,y); f=false; });
+      ctx.strokeStyle = '#5b8ee6'; ctx.lineWidth = 1.5; ctx.stroke();
+
+      // Export below zero
+      const toYExp = kwh => zeroY + (kwh / maxNeg) * negH;
+      const gradPurple = ctx.createLinearGradient(0, zeroY, 0, padT + chartH);
+      gradPurple.addColorStop(0, 'rgba(139, 92, 246, 0.45)');
+      gradPurple.addColorStop(1, 'rgba(139, 92, 246, 0.05)');
+      ctx.beginPath();
+      ctx.moveTo(toX(drawPts[0].ts_ms), zeroY);
+      drawPts.forEach(p => ctx.lineTo(toX(p.ts_ms), toYExp(p.export_kwh || 0)));
+      ctx.lineTo(toX(drawPts[drawPts.length - 1].ts_ms), zeroY);
+      ctx.closePath(); ctx.fillStyle = gradPurple; ctx.fill();
+
+      ctx.beginPath(); f = true;
+      drawPts.forEach(p => { const x = toX(p.ts_ms), y = toYExp(p.export_kwh||0); f ? ctx.moveTo(x,y) : ctx.lineTo(x,y); f=false; });
+      ctx.strokeStyle = '#8b5cf6'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    } else {
+      // Import-only area
+      const gradBlue = ctx.createLinearGradient(0, padT, 0, padT + chartH);
+      gradBlue.addColorStop(0, 'rgba(91, 142, 230, 0.38)');
+      gradBlue.addColorStop(1, 'rgba(91, 142, 230, 0.02)');
+      ctx.beginPath();
+      ctx.moveTo(toX(drawPts[0].ts_ms), padT + chartH);
+      drawPts.forEach(p => ctx.lineTo(toX(p.ts_ms), toY(p.import_kwh || 0)));
+      ctx.lineTo(toX(drawPts[drawPts.length - 1].ts_ms), padT + chartH);
+      ctx.closePath(); ctx.fillStyle = gradBlue; ctx.fill();
+
+      ctx.beginPath();
+      let f = true;
+      drawPts.forEach(p => { const x = toX(p.ts_ms), y = toY(p.import_kwh||0); f ? ctx.moveTo(x,y) : ctx.lineTo(x,y); f=false; });
+      ctx.strokeStyle = '#5b8ee6'; ctx.lineWidth = 1.5; ctx.setLineDash([]); ctx.stroke();
+    }
+
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = hasExport && maxNeg > 0.001 ? 1.0 : 0.5;
+    ctx.beginPath();
+    ctx.moveTo(padL, zeroY); ctx.lineTo(W - padR, zeroY); ctx.stroke();
+
+    ctx.fillStyle = mutedColor;
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    [0, 6, 12, 18].forEach(h => {
+      const x = padL + (h / 24) * chartW;
+      const label = h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h - 12}p`;
+      ctx.fillText(label, x, padT + chartH + 3);
+    });
+    return;
+  }
+
+  // Bars for week / month / year
   const gr = Math.min(2, barW / 2);
   points.forEach((pt, i) => {
     const x = padL + i * slotW + (slotW - barW) / 2;
@@ -252,10 +342,21 @@ export function initGridChartTooltip() {
 
     if (mouseX < padL || mouseX > rect.width - padR) { tooltip.style.display = 'none'; if (crosshair) clearCrosshair(crosshair); return; }
 
-    const idx = Math.max(0, Math.min(points.length - 1, Math.floor((mouseX - padL) / (chartW / points.length))));
-    const pt  = points[idx];
-    const barCenterX = padL + idx * (chartW / points.length) + (chartW / points.length) / 2;
-    if (crosshair) drawCrosshair(crosshair, barCenterX, padT, chartH);
+    let idx, hitX;
+    if (st.gridChartRange === 'today' && points[0]?.ts_ms) {
+      const d0 = new Date(points[0].ts_ms);
+      d0.setHours(0, 0, 0, 0);
+      const dayStartMs = d0.getTime(), dayMs = 86400 * 1000;
+      const mouseTs = dayStartMs + ((mouseX - padL) / chartW) * dayMs;
+      idx = 0; let minDist = Infinity;
+      points.forEach((p, i) => { const d = Math.abs(p.ts_ms - mouseTs); if (d < minDist) { minDist = d; idx = i; } });
+      hitX = padL + ((points[idx].ts_ms - dayStartMs) / dayMs) * chartW;
+    } else {
+      idx  = Math.max(0, Math.min(points.length - 1, Math.floor((mouseX - padL) / (chartW / points.length))));
+      hitX = padL + idx * (chartW / points.length) + (chartW / points.length) / 2;
+    }
+    const pt = points[idx];
+    if (crosshair) drawCrosshair(crosshair, hitX, padT, chartH);
 
     const header = getTooltipTimeHeader(pt, st.gridChartRange);
     let html = `<div style="font-weight:600;margin-bottom:0.25rem">${header}</div>`;
@@ -347,12 +448,67 @@ export function drawArrayChart(points, range) {
   const padT = 4, padR = 2, padB = 18, padL = 2;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
-  const n = points.length;
-  const slotW = chartW / n;
-  const barW = Math.max(1.5, slotW * 0.72);
   const maxKwh = Math.max(...points.map(p => p.kwh), 0.001);
 
   ctx.clearRect(0, 0, W, H);
+
+  if (range === 'today' && points[0]?.ts_ms) {
+    const d0 = new Date(points[0].ts_ms);
+    d0.setHours(0, 0, 0, 0);
+    const dayStartMs = d0.getTime();
+    const dayMs = 86400 * 1000;
+    const toX = ts => padL + ((ts - dayStartMs) / dayMs) * chartW;
+    const toY = kwh => padT + chartH - (kwh / maxKwh) * chartH;
+
+    // Trim trailing zeros so the curve ends at the last production point
+    const lastNonZero = points.reduce((acc, p, i) => p.kwh > 0 ? i : acc, -1);
+    const drawPts = lastNonZero >= 0 ? points.slice(0, lastNonZero + 1) : points;
+
+    const grad = ctx.createLinearGradient(0, padT, 0, padT + chartH);
+    grad.addColorStop(0, 'rgba(212, 136, 42, 0.38)');
+    grad.addColorStop(1, 'rgba(212, 136, 42, 0.02)');
+
+    ctx.beginPath();
+    ctx.moveTo(toX(drawPts[0].ts_ms), padT + chartH);
+    drawPts.forEach(p => ctx.lineTo(toX(p.ts_ms), toY(p.kwh)));
+    ctx.lineTo(toX(drawPts[drawPts.length - 1].ts_ms), padT + chartH);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.beginPath();
+    let first = true;
+    drawPts.forEach(p => {
+      const x = toX(p.ts_ms), y = toY(p.kwh);
+      first ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      first = false;
+    });
+    ctx.strokeStyle = '#d4882a';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([]);
+    ctx.stroke();
+
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT + chartH); ctx.lineTo(W - padR, padT + chartH); ctx.stroke();
+
+    ctx.fillStyle = mutedColor;
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    [0, 6, 12, 18].forEach(h => {
+      const x = padL + (h / 24) * chartW;
+      const label = h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h - 12}p`;
+      ctx.fillText(label, x, padT + chartH + 3);
+    });
+    return;
+  }
+
+  // Bars for week / month / year
+  const n = points.length;
+  const slotW = chartW / n;
+  const barW = Math.max(1.5, slotW * 0.72);
 
   const barR = Math.min(2, barW / 2);
   points.forEach((pt, i) => {
@@ -687,10 +843,22 @@ export function initChartTooltip() {
 
     if (mouseX < padL || mouseX > rect.width - padR) { tooltip.style.display = 'none'; if (crosshair) clearCrosshair(crosshair); return; }
 
-    const idx = Math.max(0, Math.min(points.length - 1, Math.floor((mouseX - padL) / (chartW / points.length))));
-    const pt  = points[idx];
-    const barCenterX = padL + idx * (chartW / points.length) + (chartW / points.length) / 2;
-    if (crosshair) drawCrosshair(crosshair, barCenterX, padT, chartH);
+    let idx, hitX;
+    if (st.chartRange === 'today' && points[0]?.ts_ms) {
+      const d0 = new Date(points[0].ts_ms);
+      d0.setHours(0, 0, 0, 0);
+      const dayStartMs = d0.getTime(), dayMs = 86400 * 1000;
+      const mouseTs = dayStartMs + ((mouseX - padL) / chartW) * dayMs;
+      idx = 0;
+      let minDist = Infinity;
+      points.forEach((p, i) => { const d = Math.abs(p.ts_ms - mouseTs); if (d < minDist) { minDist = d; idx = i; } });
+      hitX = padL + ((points[idx].ts_ms - dayStartMs) / dayMs) * chartW;
+    } else {
+      idx  = Math.max(0, Math.min(points.length - 1, Math.floor((mouseX - padL) / (chartW / points.length))));
+      hitX = padL + idx * (chartW / points.length) + (chartW / points.length) / 2;
+    }
+    const pt = points[idx];
+    if (crosshair) drawCrosshair(crosshair, hitX, padT, chartH);
 
     const header = getTooltipTimeHeader(pt, st.chartRange);
     let html = `<div style="font-weight:600;margin-bottom:0.25rem">${header}</div>`;

@@ -115,6 +115,7 @@
         <button class="arc-nav-btn" id="today-btn">Today</button>
       </div>
       <div class="arc-nav-right">
+        <span id="refresh-countdown"></span>
         <button class="arc-live-btn active" id="live-btn">Live</button>
       </div>
     </div>
@@ -178,6 +179,11 @@
       <label for="setting-min-avg-w">Minimum array average (W) to show live power (0 = disabled)</label>
       <input type="number" class="settings-input" id="setting-min-avg-w" min="0" max="100" value="5"
              title="When the array average is below this value, all panel wattage is shown as 0 W. Useful for integrations that cache the last reading overnight. Set to 0 to always show the raw value.">
+    </div>
+    <div class="settings-row">
+      <label for="setting-peak-panel-w">Peak panel output (W) for color gradient (0 = auto)</label>
+      <input type="number" class="settings-input" id="setting-peak-panel-w" min="0" max="2000" value="300"
+             title="Set to the rated wattage of your panels (e.g. 300, 360, 400). The gradient reaches full orange at 95% of this value, reflecting real-world peak output. Set to 0 to scale automatically based on the array average.">
     </div>
     <div class="settings-row">
       <label for="setting-show-grid">Show grid import/export chart (if sensors available)</label>
@@ -283,6 +289,18 @@
 </div>
 
 <script>window.BASE = '{{BASE}}';</script>
+<script type="importmap">
+{
+  "imports": {
+    "./state.js":  "{{BASE}}/state.js?v={{VERSION}}",
+    "./utils.js":  "{{BASE}}/utils.js?v={{VERSION}}",
+    "./arc.js":    "{{BASE}}/arc.js?v={{VERSION}}",
+    "./charts.js": "{{BASE}}/charts.js?v={{VERSION}}",
+    "./panels.js": "{{BASE}}/panels.js?v={{VERSION}}",
+    "./layout.js": "{{BASE}}/layout.js?v={{VERSION}}"
+  }
+}
+</script>
 <script type="module" src="{{BASE}}/app.js?v={{VERSION}}"></script>
 </body>
 </html>

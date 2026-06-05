@@ -5,7 +5,16 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
-## v2026.06.4 - TBD
+## v2026.06.5 - June 5, 2026
+
+- Added "Peak panel output (W)" setting: set to the rated wattage of your panels (e.g. 300, 360, 400) and the color gradient will scale to your actual hardware instead of a fixed 150 W threshold; full orange maps to 95% of the rated value, reflecting real-world peak output since STC ratings are rarely achieved under normal conditions; default is 300 W; set to 0 to restore the automatic scaling based on array average
+- Production chart "Today" view now renders as a filled area chart with a gradient fill and smooth line instead of hourly bars; grid chart "Today" view also converted to area chart; week/month/year views remain as bar charts since those show period aggregates
+- Fixed cache busting not working for ES module sub-imports (state.js, panels.js, charts.js, etc.); previously only app.js itself was cache-busted on version update, while the modules it imports were served stale from the browser cache; all modules are now versioned via an import map in index.html so a hard refresh is no longer needed after updating
+- Panel cards now have a subtle 3D raised appearance: a multi-layer box-shadow lifts each card off the background, and colored panels have a lighting gradient (brighter at the top, slightly darker at the bottom) that gives them depth; panel color updates now fade smoothly over 0.5s instead of snapping instantly
+- Live indicator now pulses with a soft green glow when in live mode
+- Added countdown timer next to the Live button showing seconds until the next data refresh; hidden when viewing history
+
+## v2026.06.4 - June 5, 2026
 
 - Fixed refresh interval minimum being inconsistent between the frontend (was 10 seconds) and backend (was 30 seconds); both now enforce 30 seconds as the minimum; added a 3600 second (1 hour) maximum on both ends; the Settings label now shows the valid range (30 - 3600 seconds)
 - Panel grid now auto-fits to the viewport in view mode: cell size is calculated so the full grid fits on screen without scrolling in both X and Y; recalculates automatically on window resize; layout editor continues to scroll as before
