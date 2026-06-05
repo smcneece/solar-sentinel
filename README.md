@@ -46,7 +46,7 @@ Should work with any solar integration already configured in the Energy Dashboar
 
 ### Panel Grid
 - Auto-discovers all inverters and micro-inverters from the HA Energy Dashboard; no manual entity configuration required
-- Color-coded per-panel cards relative to the array average: green (90%+), yellow (70-89%), red (below 70%), gray (offline or unavailable)
+- Color-coded per-panel cards using a warm gradient from pale yellow (low output) to deep orange (peak output); absolute color reflects both relative performance within the array and the overall production level, so panels at dawn appear pale regardless of relative rank; gray indicates offline or unavailable
 - Live wattage display on each panel card
 - Today's energy (Wh) shown on each card, updated as the time slider moves
 - Click any panel card to open the panel detail modal:
@@ -177,7 +177,11 @@ After installation, two things will make the most difference:
 
 Open **Settings** (the gear icon in the header) and set the refresh interval to match your solar integration's polling frequency. The default is 5 minutes, which works well for Enhanced SunPower and similar integrations whose hardware updates every 5 minutes. If your integration polls more frequently, lower the value; the minimum is 30 seconds and the maximum is 3600 seconds (1 hour). Setting it shorter than your integration actually refreshes only adds load with no benefit.
 
-### 2. Set Up Your Panel Layout
+### 2. Set Your Panel Wattage
+
+Open **Settings** and enter the rated wattage of your panels in the **Peak panel output (W)** field. The default is 300W, which works well for common residential panels, but if yours are 360W, 400W, or another rating, entering the correct value gives you a more accurate color gradient. Solar Sentinel scales full orange to approximately 95% of the rated value, which reflects the real-world peak you will actually see rather than the theoretical STC rating. Set to 0 to use automatic scaling based on the live array average.
+
+### 3. Set Up Your Panel Layout
 
 > **Tip before you start:** Many solar integrations prefix every panel name with the brand or device type, leaving you with names like "SunPower Inverter E00100000000001" on every card. Open **Settings** and add those repeated words to the **Strip from panel names** field (comma-separated) before you begin placing panels. The cards will show just the short unique part of each name, making it much easier to identify panels during layout. This is display-only; nothing is renamed in Home Assistant.
 
@@ -201,6 +205,7 @@ All configuration is done within the add-on UI via the Settings modal (the gear 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | Refresh interval | 5 min | How often Solar Sentinel polls HA for current panel states (minimum 30 seconds, maximum 3600 seconds / 1 hour). Set this to match your integration's polling frequency. For SunPower and other integrations limited by inverter firmware, the hardware typically updates every 5 minutes, so polling more frequently returns the same data. Integrations that support faster sensor updates can use a lower value. |
+| Peak panel output | 300 W | The rated wattage of your solar panels (e.g. 300, 360, 400). Used to scale the color gradient so full orange appears at approximately 95% of this value, matching real-world peak output. Set to 0 to scale automatically based on the live array average instead. |
 | Minimum array average | 5 W | When the array-wide average wattage is below this value, all panel wattage is displayed as 0 W. Prevents stale cached readings from appearing as real production (common with integrations that hold the last known value overnight). Set to 0 to always show the raw value from HA. |
 | Show grid chart | on | Shows the grid import/export chart to the left of the sun arc when grid sensors are configured in the HA Energy Dashboard. Toggle off to hide the panel even when sensors are available. |
 | Show names on panels | on | Shows or hides the panel name text on each card in the live view. Toggle off for a cleaner look showing only wattage and energy. Names are always shown in the layout editor regardless of this setting. |
