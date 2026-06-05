@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "2026.06.3"
+VERSION = "2026.06.4"
 
 _inverters: list = []        # discovered inverter descriptors
 _panels_cache: list = []     # latest computed panel states
@@ -156,7 +156,7 @@ async def refresh_loop():
             all_unavailable = False
 
         settings = storage.get_settings()
-        interval = max(30, int(settings.get("refresh_interval", 300)))
+        interval = min(3600, max(30, int(settings.get("refresh_interval", 300))))
 
         if all_unavailable and _fast_retry_count < _MAX_FAST_RETRIES:
             _fast_retry_count += 1

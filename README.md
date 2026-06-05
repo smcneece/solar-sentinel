@@ -175,7 +175,7 @@ After installation, two things will make the most difference:
 
 ### 1. Set Your Refresh Interval
 
-Open **Settings** (the gear icon in the header) and set the refresh interval to match your solar integration's polling frequency. The default is 5 minutes, which works well for Enhanced SunPower and similar integrations whose hardware updates every 5 minutes. If your integration polls more frequently, lower the value; the minimum is 30 seconds. Setting it shorter than your integration actually refreshes only adds load with no benefit.
+Open **Settings** (the gear icon in the header) and set the refresh interval to match your solar integration's polling frequency. The default is 5 minutes, which works well for Enhanced SunPower and similar integrations whose hardware updates every 5 minutes. If your integration polls more frequently, lower the value; the minimum is 30 seconds and the maximum is 3600 seconds (1 hour). Setting it shorter than your integration actually refreshes only adds load with no benefit.
 
 ### 2. Set Up Your Panel Layout
 
@@ -200,7 +200,7 @@ All configuration is done within the add-on UI via the Settings modal (the gear 
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Refresh interval | 5 min | How often Solar Sentinel polls HA for current panel states (minimum 30 seconds). Set this to match your integration's polling frequency. For SunPower and other integrations limited by inverter firmware, the hardware typically updates every 5 minutes, so polling more frequently returns the same data. Integrations that support faster sensor updates can use a lower value. |
+| Refresh interval | 5 min | How often Solar Sentinel polls HA for current panel states (minimum 30 seconds, maximum 3600 seconds / 1 hour). Set this to match your integration's polling frequency. For SunPower and other integrations limited by inverter firmware, the hardware typically updates every 5 minutes, so polling more frequently returns the same data. Integrations that support faster sensor updates can use a lower value. |
 | Minimum array average | 5 W | When the array-wide average wattage is below this value, all panel wattage is displayed as 0 W. Prevents stale cached readings from appearing as real production (common with integrations that hold the last known value overnight). Set to 0 to always show the raw value from HA. |
 | Show grid chart | on | Shows the grid import/export chart to the left of the sun arc when grid sensors are configured in the HA Energy Dashboard. Toggle off to hide the panel even when sensors are available. |
 | Show names on panels | on | Shows or hides the panel name text on each card in the live view. Toggle off for a cleaner look showing only wattage and energy. Names are always shown in the layout editor regardless of this setting. |

@@ -5,6 +5,11 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.06.4 - TBD
+
+- Fixed refresh interval minimum being inconsistent between the frontend (was 10 seconds) and backend (was 30 seconds); both now enforce 30 seconds as the minimum; added a 3600 second (1 hour) maximum on both ends; the Settings label now shows the valid range (30 - 3600 seconds)
+- Panel grid now auto-fits to the viewport in view mode: cell size is calculated so the full grid fits on screen without scrolling in both X and Y; recalculates automatically on window resize; layout editor continues to scroll as before
+
 ## v2026.06.3 - June 3, 2026
 
 - Fixed time slider broken (stuck, unresponsive, play does nothing) for users with long summer days where dusk falls late enough that the pre/post-dusk arc extension crosses midnight; most likely to affect users at higher latitudes (New York and further north) in summer months; the slider range calculation now adds the extension in minutes directly instead of converting a potentially next-day timestamp to local time

@@ -2,7 +2,7 @@ import { st, FINE_W, FINE_H } from './state.js';
 import { fmtW, todayStr, currentMinutes, sliderToTimestamp, applyHistoryToPanels, recolorPanels } from './utils.js';
 import { renderSunArc } from './arc.js';
 import { applyLeftPanelVisibility, fetchArrayChart, fetchGridChart, fetchBatteryChart, drawArrayChart, drawGridChart, drawBatterySocChart, drawBatteryKwhChart, initChartTooltip, initGridChartTooltip, initBatteryChartTooltip } from './charts.js';
-import { renderPanels, openPanelModal, switchPanelTab, loadPanelChart, savePanelRename } from './panels.js';
+import { renderPanels, fitViewGrid, openPanelModal, switchPanelTab, loadPanelChart, savePanelRename } from './panels.js';
 import { fetchGrid, enterEditMode, exitEditMode, renderEditMode } from './layout.js';
 
 // ── Modal helpers ─────────────────────────────────────────────────────────
@@ -58,6 +58,7 @@ export async function fetchPanels() {
       document.getElementById('header-status').textContent =
         data.count ? `${online} / ${data.count} online` : 'No inverters found';
       renderPanels(st.panels);
+      requestAnimationFrame(fitViewGrid);
     }
   } catch (e) {
     console.error('fetchPanels:', e);
@@ -117,7 +118,7 @@ async function fetchSettings() {
     const resp = await fetch(`${window.BASE}/api/settings`);
     if (!resp.ok) return;
     const s = await resp.json();
-    st.refreshInterval = Math.max(10, (s.refresh_interval || 30)) * 1000;
+    st.refreshInterval = Math.min(3600, Math.max(30, (s.refresh_interval || 300))) * 1000;
     st.showGridChart = s.show_grid_chart !== false;
     st.nameStrip = (s.name_strip || '').split(',').map(x => x.trim()).filter(Boolean);
     st.showPanelNames = s.show_panel_names !== false;
@@ -191,6 +192,7 @@ function playTick() {
     const online = panels.filter(p => p.status === 'online' && p.power_w > 0);
     document.getElementById('total-power').textContent = fmtW(online.reduce((s, p) => s + p.power_w, 0));
     renderPanels(panels);
+    requestAnimationFrame(fitViewGrid);
   } else {
     onSliderInput();
   }
@@ -257,6 +259,7 @@ function onLive() {
   _setLiveActive(true);
   updateSliderToNow();
   renderPanels(st.panels);
+  requestAnimationFrame(fitViewGrid);
   if (st.sunData) renderSunArc(st.sunData, null, st.weather);
 }
 
@@ -295,6 +298,7 @@ async function onSliderInput() {
       _setLiveActive(true);
       updateSliderToNow();
       renderPanels(st.panels);
+      requestAnimationFrame(fitViewGrid);
       if (st.sunData) renderSunArc(st.sunData, null, st.weather);
       return;
     }
@@ -324,6 +328,7 @@ async function onSliderInput() {
     fmtW(online.reduce((s, p) => s + p.power_w, 0));
 
   renderPanels(panels);
+  requestAnimationFrame(fitViewGrid);
 }
 
 async function onDateChange(preserveSlider = false) {
@@ -377,7 +382,7 @@ async function openSettings() {
 }
 
 async function saveSettings() {
-  const interval = parseInt(document.getElementById('setting-interval').value) || 30;
+  const interval = Math.min(3600, Math.max(30, parseInt(document.getElementById('setting-interval').value) || 300));
   const showGrid = document.getElementById('setting-show-grid').checked;
   try {
     await fetch(`${window.BASE}/api/settings`, {
@@ -393,7 +398,7 @@ async function saveSettings() {
         name_strip: document.getElementById('setting-name-strip').value.trim(),
       }),
     });
-    st.refreshInterval = Math.max(10, interval) * 1000;
+    st.refreshInterval = Math.min(3600, Math.max(30, interval)) * 1000;
     st.showGridChart = showGrid;
     st.nameStrip = (document.getElementById('setting-name-strip').value.trim())
       .split(',').map(x => x.trim()).filter(Boolean);
@@ -403,6 +408,7 @@ async function saveSettings() {
     st.minAvgW = Math.max(0, parseInt(document.getElementById('setting-min-avg-w').value) || 0);
     applyLeftPanelVisibility();
     renderPanels(st.panels);
+    requestAnimationFrame(fitViewGrid);
     closeModal('settings-modal');
   } catch (e) { console.error('saveSettings:', e); }
 }
@@ -674,6 +680,7 @@ async function init() {
   });
   initBatteryChartTooltip();
 
+  let _resizeTimer = null;
   window.addEventListener('resize', () => {
     if (st.chartRange) drawArrayChart(st.lastChartPoints || [], st.chartRange);
     if (st.lastGridPoints.length) drawGridChart(st.lastGridPoints, st.gridHasExport);
@@ -681,6 +688,8 @@ async function init() {
       if (st.batteryChartType === 'soc') drawBatterySocChart(st.lastBatteryPoints);
       else drawBatteryKwhChart(st.lastBatteryPoints);
     }
+    clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(fitViewGrid, 100);
     if (st.sunData) renderSunArc(st.sunData, st.sliderActive ? sliderToTimestamp(parseInt(document.getElementById('time-slider').value)) : null, st.weather);
     if (st.editMode) renderEditMode(st.panels);
   });

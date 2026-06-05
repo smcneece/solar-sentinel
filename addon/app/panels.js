@@ -107,6 +107,7 @@ export function renderGridView(panels, section, msg) {
 
   const wrapper = document.createElement('div');
   const grid = document.createElement('div');
+  grid.id = 'panel-view-grid';
   grid.className = 'panel-grid-pos';
   grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
   grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
@@ -371,6 +372,30 @@ export async function savePanelRename() {
       document.dispatchEvent(new CustomEvent('solar:refresh-panels'));
     }
   } catch (e) { console.error('savePanelRename:', e); }
+}
+
+export function fitViewGrid() {
+  if (st.editMode) return;
+  const section = document.getElementById('panels-section');
+  const grid = document.getElementById('panel-view-grid');
+  if (!section || !grid || !st.gridLayout) return;
+
+  const { rows, cols } = st.gridLayout;
+  const padPx = parseFloat(getComputedStyle(section).paddingLeft) || 16;
+  const gapPx = parseFloat(getComputedStyle(grid).gap) || 6;
+
+  const availW = section.clientWidth  - padPx * 2;
+  const availH = section.clientHeight - padPx * 2;
+
+  const cellPx = Math.floor(Math.min(
+    (availW - (cols - 1) * gapPx) / cols,
+    (availH - (rows - 1) * gapPx) / rows
+  ));
+  if (cellPx <= 0) return;
+
+  grid.style.gridTemplateColumns = `repeat(${cols}, ${cellPx}px)`;
+  grid.style.gridTemplateRows    = `repeat(${rows}, ${cellPx}px)`;
+  grid.style.aspectRatio = '';
 }
 
 // openModal/closeModal are defined in app.js; panels.js calls them via the global

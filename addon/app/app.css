@@ -62,7 +62,8 @@
     font-family: var(--primary-font-family, system-ui, sans-serif);
     background: var(--bg);
     color: var(--text);
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
   }
