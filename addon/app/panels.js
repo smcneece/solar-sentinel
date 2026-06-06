@@ -387,15 +387,32 @@ export function fitViewGrid() {
   const availW = section.clientWidth  - padPx * 2;
   const availH = section.clientHeight - padPx * 2;
 
-  const cellPx = Math.floor(Math.min(
-    (availW - (cols - 1) * gapPx) / cols,
-    (availH - (rows - 1) * gapPx) / rows
-  ));
+  const cellPxW = Math.floor((availW - (cols - 1) * gapPx) / cols);
+  const cellPxH = Math.floor((availH - (rows - 1) * gapPx) / rows);
+  const cellPx  = Math.min(cellPxW, cellPxH);
   if (cellPx <= 0) return;
+
+  // On initial page load, requestAnimationFrame fires before fetchSun has
+  // rendered the arc section, so the flex layout may not have finished
+  // assigning height to the panels section. If cellPxH is less than 60% of
+  // cellPxW the height hasn't settled; keep the initial aspectRatio layout
+  // and retry. After 2 retries (500 ms total) we apply regardless, which
+  // correctly handles tall grids where the height constraint is genuinely
+  // tighter than the width constraint.
+  const retries = parseInt(grid.dataset.fitRetries || '0');
+  if (cellPxH < cellPxW * 0.6 && retries < 2) {
+    grid.dataset.fitRetries = retries + 1;
+    setTimeout(fitViewGrid, 250);
+    return;
+  }
 
   grid.style.gridTemplateColumns = `repeat(${cols}, ${cellPx}px)`;
   grid.style.gridTemplateRows    = `repeat(${rows}, ${cellPx}px)`;
   grid.style.aspectRatio = '';
+  // Threshold is on the landscape panel CARD height (FINE_H fine rows),
+  // not the raw fine cell, so large fine-grid layouts are not incorrectly scaled.
+  const cardH = cellPx * FINE_H + (FINE_H - 1) * gapPx;
+  grid.dataset.cellSize = cardH < 72 ? 'sm' : '';
 }
 
 // openModal/closeModal are defined in app.js; panels.js calls them via the global

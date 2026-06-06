@@ -5,6 +5,14 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.06.6 - June 6, 2026
+
+- Fixed "Peak panel output (W)" setting reverting to 300 every time Settings was saved; the value was being accepted by the UI but silently dropped by the server due to a missing allowlist entry; the setting now saves and persists correctly
+- Panel colors now update immediately when Settings is saved instead of waiting for the next scheduled refresh cycle; useful when adjusting Peak panel output or min average threshold to see the effect right away
+- Fixed total array wattage in the header not restoring to the live value when clicking the Live button after scrubbing through history; it now updates immediately without waiting for the next refresh cycle
+- Debug info download now includes a client block with browser user agent, screen resolution, device pixel ratio, and window dimensions; useful for diagnosing display issues from bug reports
+- Panel card text (name, wattage, kWh) now scales down on small screens where cells are genuinely cramped; scaling is suppressed when cells are large enough that the default sizes fit comfortably, so normal and large displays are unaffected
+
 ## v2026.06.5 - June 5, 2026
 
 - Added "Peak panel output (W)" setting: set to the rated wattage of your panels (e.g. 300, 360, 400) and the color gradient will scale to your actual hardware instead of a fixed 150 W threshold; full orange maps to 95% of the rated value, reflecting real-world peak output since STC ratings are rarely achieved under normal conditions; default is 300 W; set to 0 to restore the automatic scaling based on array average

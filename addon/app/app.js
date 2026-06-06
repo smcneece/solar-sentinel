@@ -272,6 +272,11 @@ function onLive() {
   renderPanels(st.panels);
   requestAnimationFrame(fitViewGrid);
   if (st.sunData) renderSunArc(st.sunData, null, st.weather);
+  const liveOnline = (st.panels || []).filter(p => p.status === 'online');
+  document.getElementById('total-power').textContent = fmtW(liveOnline.reduce((s, p) => s + p.power_w, 0));
+  const total = (st.panels || []).length;
+  document.getElementById('header-status').textContent =
+    total ? `${liveOnline.length} / ${total} online` : 'No inverters found';
 }
 
 function onToday() {
@@ -570,8 +575,16 @@ async function init() {
     status.textContent = 'Gathering...';
     try {
       const resp = await fetch(`${window.BASE}/api/debug`);
-      const text = await resp.text();
-      const blob = new Blob([text], { type: 'application/json' });
+      const data = await resp.json();
+      data.client = {
+        userAgent: navigator.userAgent,
+        screenWidth: screen.width,
+        screenHeight: screen.height,
+        devicePixelRatio: window.devicePixelRatio,
+        windowWidth: window.innerWidth,
+        windowHeight: window.innerHeight,
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

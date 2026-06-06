@@ -17,6 +17,7 @@ DATA_FILE = "/data/solar_sentinel.json"
 DEFAULT_SETTINGS = {
     "refresh_interval": 300,
     "min_avg_w": 5,
+    "peak_panel_w": 300,
     "show_grid_chart": True,
     "show_panel_names": True,
     "show_panel_unit": True,
@@ -55,7 +56,7 @@ def get_settings() -> dict:
 def save_settings(updates: dict) -> dict:
     data = _load()
     current = {**DEFAULT_SETTINGS, **data.get("settings", {})}
-    allowed = {"refresh_interval", "min_avg_w", "show_grid_chart", "show_panel_names", "show_panel_unit", "name_strip", "invert_battery_power"}
+    allowed = {"refresh_interval", "min_avg_w", "peak_panel_w", "show_grid_chart", "show_panel_names", "show_panel_unit", "name_strip", "invert_battery_power"}
     for key in allowed:
         if key in updates:
             current[key] = updates[key]

@@ -176,6 +176,11 @@
   }
   .panel-offline { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.15rem; }
 
+  #panel-view-grid[data-cell-size="sm"] .panel-name    { font-size: 0.55rem; }
+  #panel-view-grid[data-cell-size="sm"] .panel-power   { font-size: 0.80rem; }
+  #panel-view-grid[data-cell-size="sm"] .panel-wh      { font-size: 0.56rem; }
+  #panel-view-grid[data-cell-size="sm"] .panel-offline { font-size: 0.58rem; }
+
   /* Sun arc section */
   .arc-section {
     flex-shrink: 0;

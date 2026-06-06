@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "2026.06.5"
+VERSION = "2026.06.6"
 
 _inverters: list = []        # discovered inverter descriptors
 _panels_cache: list = []     # latest computed panel states
@@ -310,6 +310,7 @@ async def handle_api_settings_post(request):
     try:
         data = await request.json()
         result = storage.save_settings(data)
+        asyncio.ensure_future(do_refresh())
         return web.Response(text=json.dumps(result), content_type="application/json")
     except Exception:
         _LOGGER.exception("Failed to save settings")
