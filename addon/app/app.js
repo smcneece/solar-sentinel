@@ -124,6 +124,7 @@ async function fetchSettings() {
     st.showPanelNames = s.show_panel_names !== false;
     st.showPanelUnit = s.show_panel_unit !== false;
     st.minAvgW = s.min_avg_w ?? 5;
+    st.peakPanelW = s.peak_panel_w ?? 300;
     st.invertBatteryPower = s.invert_battery_power === true;
     applyLeftPanelVisibility();
   } catch (e) { /* ignore */ }
@@ -150,6 +151,7 @@ function scheduleRefresh() {
       updateSliderToNow();
       if (st.sunData) renderSunArc(st.sunData, null, st.weather);
       if (st.chartRange === 'today') fetchArrayChart();
+      if (st.showGridChart && st.gridChartRange === 'today') fetchGridChart();
       if (st.batteryAvailable) {
         fetchBatteryStatus();
         if (st.leftPanelTab === 'battery' && st.batteryChartRange === 'today') fetchBatteryChart();
@@ -424,6 +426,7 @@ async function saveSettings() {
     st.showPanelUnit = document.getElementById('setting-show-panel-unit').checked;
     st.invertBatteryPower = document.getElementById('setting-invert-battery').checked;
     st.minAvgW = Math.max(0, parseInt(document.getElementById('setting-min-avg-w').value) || 0);
+    st.peakPanelW = Math.max(0, parseInt(document.getElementById('setting-peak-panel-w').value) || 0);
     applyLeftPanelVisibility();
     renderPanels(st.panels);
     requestAnimationFrame(fitViewGrid);

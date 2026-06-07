@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "2026.06.6"
+VERSION = "2026.06.7"
 
 _inverters: list = []        # discovered inverter descriptors
 _panels_cache: list = []     # latest computed panel states

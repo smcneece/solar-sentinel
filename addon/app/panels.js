@@ -1,6 +1,27 @@
 import { st, FINE_W, FINE_H } from './state.js';
 import { fmtW, fmtWh, getSpan, stripName } from './utils.js';
 
+let _initialFitDone = false;
+let _layoutBounds = null; // bounding box of placed content, set by renderGridView
+
+function _computeLayoutBounds(layout) {
+  const positions = layout.positions || {};
+  const rotations  = layout.rotations || {};
+  const labels     = layout.labels    || [];
+  let minRow = Infinity, maxRow = 0, minCol = Infinity, maxCol = 0;
+  for (const [eid, [fr, fc]] of Object.entries(positions)) {
+    const [spanCols, spanRows] = getSpan(eid, rotations);
+    minRow = Math.min(minRow, fr);      maxRow = Math.max(maxRow, fr + spanRows);
+    minCol = Math.min(minCol, fc);      maxCol = Math.max(maxCol, fc + spanCols);
+  }
+  for (const lbl of labels) {
+    minRow = Math.min(minRow, lbl.row); maxRow = Math.max(maxRow, lbl.row + (lbl.spanRows || 1));
+    minCol = Math.min(minCol, lbl.col); maxCol = Math.max(maxCol, lbl.col + (lbl.spanCols || 1));
+  }
+  if (minRow === Infinity) return null;
+  return { minRow, maxRow, minCol, maxCol };
+}
+
 export function makePanelCard(p, isDraggable) {
   const cell = document.createElement('div');
   const isGradient = p.color && p.color !== 'gray';
@@ -110,15 +131,16 @@ export function renderGridView(panels, section, msg) {
   grid.id = 'panel-view-grid';
   grid.className = 'panel-grid-pos';
   grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
-  grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+  grid.style.gridTemplateRows    = `repeat(${rows}, minmax(0, 1fr))`;
   grid.style.aspectRatio = `${cols} / ${rows}`;
 
   for (const [key, eid] of Object.entries(panelAt)) {
     const [fr, fc] = key.split(',').map(Number);
     const [spanCols, spanRows] = getSpan(eid, rotations);
     const card = makePanelCard(byId[eid], false);
+    card.classList.add(spanRows > spanCols ? 'portrait' : 'landscape');
     card.style.gridColumn = `${fc + 1} / span ${spanCols}`;
-    card.style.gridRow = `${fr + 1} / span ${spanRows}`;
+    card.style.gridRow    = `${fr + 1} / span ${spanRows}`;
     grid.appendChild(card);
   }
 
@@ -126,7 +148,7 @@ export function renderGridView(panels, section, msg) {
     const el = document.createElement('div');
     el.className = 'label-view';
     el.style.gridColumn = `${lbl.col + 1} / span ${lbl.spanCols}`;
-    el.style.gridRow = `${lbl.row + 1} / span ${lbl.spanRows}`;
+    el.style.gridRow    = `${lbl.row + 1} / span ${lbl.spanRows}`;
     el.textContent = lbl.text;
     grid.appendChild(el);
   }
@@ -399,18 +421,22 @@ export function fitViewGrid() {
   // and retry. After 2 retries (500 ms total) we apply regardless, which
   // correctly handles tall grids where the height constraint is genuinely
   // tighter than the width constraint.
-  const retries = parseInt(grid.dataset.fitRetries || '0');
-  if (cellPxH < cellPxW * 0.6 && retries < 2) {
-    grid.dataset.fitRetries = retries + 1;
-    setTimeout(fitViewGrid, 250);
-    return;
+  if (!_initialFitDone) {
+    const retries = parseInt(grid.dataset.fitRetries || '0');
+    if (cellPxH < cellPxW * 0.6 && retries < 2) {
+      grid.dataset.fitRetries = retries + 1;
+      setTimeout(fitViewGrid, 250);
+      return;
+    }
+    _initialFitDone = true;
   }
 
   grid.style.gridTemplateColumns = `repeat(${cols}, ${cellPx}px)`;
   grid.style.gridTemplateRows    = `repeat(${rows}, ${cellPx}px)`;
   grid.style.aspectRatio = '';
-  // Threshold is on the landscape panel CARD height (FINE_H fine rows),
-  // not the raw fine cell, so large fine-grid layouts are not incorrectly scaled.
+  grid.style.marginLeft = '';
+  grid.style.marginTop  = '';
+
   const cardH = cellPx * FINE_H + (FINE_H - 1) * gapPx;
   grid.dataset.cellSize = cardH < 72 ? 'sm' : '';
 }

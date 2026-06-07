@@ -164,6 +164,7 @@ export function renderEditMode(panels) {
     const p = byId[eid];
     const [spanCols, spanRows] = getSpan(eid, st.editRotations);
     const card = makePanelCard(p, true);
+    card.classList.add(spanRows > spanCols ? 'portrait' : 'landscape');
     card.style.gridColumn = `${fc + 1} / span ${spanCols}`;
     card.style.gridRow = `${fr + 1} / span ${spanRows}`;
     card.dataset.row = fr;

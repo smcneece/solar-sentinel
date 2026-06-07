@@ -95,9 +95,14 @@ export function recolorPanels(panels) {
   if (avg < (st.minAvgW ?? 5)) {
     return panels.map(p => ({...p, power_w: 0, color: 'gray'}));
   }
-  const scale = Math.min(1.0, avg / _WARM_THRESHOLD);
   return panels.map(p => {
     if (p.status !== 'online' || avg <= 0) return {...p, color: 'gray'};
-    return {...p, color: _gradientColor((p.power_w / avg) * scale)};
+    let t;
+    if (st.peakPanelW > 0) {
+      t = Math.min(1.0, p.power_w / (st.peakPanelW * 0.95));
+    } else {
+      t = (p.power_w / avg) * Math.min(1.0, avg / _WARM_THRESHOLD);
+    }
+    return {...p, color: _gradientColor(t)};
   });
 }

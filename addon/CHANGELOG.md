@@ -5,6 +5,14 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.06.7 - June 7, 2026
+
+- Fixed panel colors in history/slider mode not respecting the "Peak panel output (W)" setting; the live view gets colors from the server which applied the setting correctly, but the client-side recalculation used for history scrubbing kept a hardcoded 150W relative-average formula instead of the absolute threshold formula the server uses; both paths now use the same calculation
+- Fixed battery SoC chart (Today view) line stopping at the last HA-recorded state change; when a battery sits at a constant SoC (e.g. 100% while idle), HA does not log further state changes, so the chart line appeared to freeze; the chart now extends a flat line to the current time using the last known SoC, advancing on each refresh cycle
+- Fixed grid import/export chart not refreshing during the live update cycle; the production chart updated correctly but the grid chart was missing from the refresh loop entirely and only updated when switching tabs or dates
+- Fixed panel grid layout briefly jumping between the auto-fitted size and the aspect-ratio fallback on every slider tick; the initial load stability check (which waits for the sun arc to render before locking in cell dimensions) was re-running on each slider update because the grid DOM is rebuilt on every render; the check now runs only once on initial page load
+- Fixed panel name text being cut off after the first word in the positioned grid view; a browser rendering quirk caused the name element to shrink narrower than its container when using webkit line-clamp inside a flex column, so only the first word fit before the overflow clip; the name now correctly spans the full card width; landscape panels stack content from the top so the name is always visible before watts and kWh even when the card is short, while portrait panels keep vertical centering since they have ample height
+
 ## v2026.06.6 - June 6, 2026
 
 - Fixed "Peak panel output (W)" setting reverting to 300 every time Settings was saved; the value was being accepted by the UI but silently dropped by the server due to a missing allowlist entry; the setting now saves and persists correctly

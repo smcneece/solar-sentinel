@@ -42,6 +42,7 @@ export const st = {
   showPanelNames: true,
   showPanelUnit: true,
   minAvgW: 5,
+  peakPanelW: 300,
   invertBatteryPower: false,
   isPlaying: false,
   playbackSpeed: 0.5,

@@ -161,6 +161,7 @@
     margin-bottom: 0.2rem;
     line-height: 1.3;
     width: 100%;
+    align-self: stretch;
   }
   .panel-power {
     font-size: 1.0rem;
@@ -752,7 +753,8 @@
   }
   .pgp-cell.drag-over,
   .panel-cell.drag-over { outline: 3px solid #4fc3f7 !important; outline-offset: -3px; background: rgba(79,195,247,0.18) !important; border-color: transparent !important; }
-  .panel-grid-pos .panel-cell { min-width: 0; overflow: hidden; }
+  .panel-grid-pos .panel-cell { min-width: 0; overflow: hidden; justify-content: flex-start; }
+  .panel-grid-pos .panel-cell.portrait { justify-content: center; }
 
   /* Grid edit toolbar */
   .grid-toolbar {

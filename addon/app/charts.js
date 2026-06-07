@@ -1,4 +1,5 @@
 import { st } from './state.js';
+import { todayStr } from './utils.js';
 
 function drawCrosshair(canvas, x, padT, chartH) {
   const dpr = window.devicePixelRatio || 1;
@@ -574,7 +575,18 @@ export async function fetchBatteryChart() {
     clearTimeout(loadingTimer);
     if (!resp.ok) { _drawBatteryMessage('Error'); return; }
     const data = await resp.json();
-    st.lastBatteryPoints = data.points || [];
+    let pts = data.points || [];
+    if (data.type === 'soc' && range === 'today' && pts.length > 0) {
+      const dateVal = document.getElementById('date-picker').value;
+      if (!dateVal || dateVal === todayStr()) {
+        const nowMs = Date.now();
+        const last = pts[pts.length - 1];
+        if (nowMs - last.ts_ms > 60000) {
+          pts = [...pts, { ts_ms: nowMs, soc_pct: last.soc_pct }];
+        }
+      }
+    }
+    st.lastBatteryPoints = pts;
     st.batteryChartType  = data.type || 'soc';
     if (data.type === 'soc') {
       drawBatterySocChart(st.lastBatteryPoints);
