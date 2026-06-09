@@ -22,11 +22,12 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "2026.06.7"
+VERSION = "2026.06.8"
 
 _inverters: list = []        # discovered inverter descriptors
 _panels_cache: list = []     # latest computed panel states
 _ha_tz: str = ""             # HA timezone string
+_ha_location: dict = {}      # {"latitude", "longitude", "elevation"} from HA /config
 _grid_entities: dict = {}    # {"import_id", "import_unit", "export_id", "export_unit"}
 _batteries: list = []        # discovered battery descriptors
 _battery_discovered: bool = False
@@ -64,11 +65,20 @@ def _compute_color(power_w: float, avg_w: float, status: str, peak_w: float = 0.
 
 async def do_refresh() -> bool:
     """Returns True if all discovered panels are unavailable (signals fast retry to caller)."""
-    global _panels_cache, _ha_tz, _inverters, _grid_entities, _batteries, _battery_discovered
+    global _panels_cache, _ha_tz, _ha_location, _inverters, _grid_entities, _batteries, _battery_discovered
 
     if not _ha_tz:
         _ha_tz = await ha_api.get_ha_timezone()
         _LOGGER.info("HA timezone: %s", _ha_tz or "(unknown)")
+
+    if not _ha_location:
+        _ha_location = await ha_api.get_ha_location()
+        if _ha_location:
+            _LOGGER.info("HA location: lat=%s lon=%s",
+                         _ha_location.get("latitude"), _ha_location.get("longitude"))
+        else:
+            _LOGGER.warning("HA location unavailable; sun times for past dates "
+                            "will fall back to live sun.sun values.")
 
     if not _inverters:
         _LOGGER.info("Running inverter discovery...")
@@ -236,12 +246,35 @@ async def handle_api_panels(request):
 
 
 async def handle_api_sun(request):
-    state = await ha_api.get_sun_state()
-    attrs = state.get("attributes", {})
-    times = ha_api.extract_sun_times(attrs, _ha_tz)
-    moon_phase = await ha_api.get_moon_state()
-    if moon_phase:
-        times["moon_phase"] = moon_phase
+    date_str = request.rel_url.query.get("date", "")
+
+    try:
+        tz = zoneinfo.ZoneInfo(_ha_tz) if _ha_tz else datetime.timezone.utc
+    except Exception:
+        tz = datetime.timezone.utc
+    today_str = datetime.datetime.now(tz).strftime("%Y-%m-%d")
+
+    # For today (or when no date is given) use the live sun.sun entity: it's the
+    # most accurate, and matches what HA shows elsewhere. For any other date,
+    # compute the times locally from the installation's latitude/longitude.
+    if not date_str or date_str == today_str or not _ha_location:
+        state = await ha_api.get_sun_state()
+        attrs = state.get("attributes", {})
+        times = ha_api.extract_sun_times(attrs, _ha_tz)
+        moon_phase = await ha_api.get_moon_state()
+        if moon_phase:
+            times["moon_phase"] = moon_phase
+        # If a past date was requested but we have no coordinates to compute it,
+        # the live values above are the best available fallback.
+    else:
+        times = ha_api.compute_sun_times(
+            date_str,
+            _ha_location["latitude"],
+            _ha_location["longitude"],
+            _ha_tz,
+        )
+        times["moon_phase"] = ha_api.compute_moon_phase(date_str)
+
     return web.Response(text=json.dumps(times), content_type="application/json")
 
 

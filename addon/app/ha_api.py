@@ -8,6 +8,7 @@ import calendar
 import datetime
 import json
 import logging
+import math
 import zoneinfo
 from urllib.parse import urlencode
 
@@ -36,6 +37,23 @@ async def get_ha_config() -> dict:
 
 async def get_ha_timezone() -> str:
     return (await get_ha_config()).get("time_zone", "")
+
+
+async def get_ha_location() -> dict:
+    """Fetch the HA installation's latitude/longitude/elevation from /config.
+
+    Returns {"latitude", "longitude", "elevation"} with float values, or an
+    empty dict if the config doesn't expose coordinates."""
+    cfg = await get_ha_config()
+    lat = cfg.get("latitude")
+    lon = cfg.get("longitude")
+    if lat is None or lon is None:
+        return {}
+    return {
+        "latitude": float(lat),
+        "longitude": float(lon),
+        "elevation": float(cfg.get("elevation", 0) or 0),
+    }
 
 
 async def get_ha_version() -> str:
@@ -990,6 +1008,127 @@ def extract_sun_times(sun_attrs: dict, tz_name: str) -> dict:
         "elevation":  sun_attrs.get("elevation"),
         "azimuth":    sun_attrs.get("azimuth"),
     }
+
+
+def _julian_day(dt_utc: datetime.datetime) -> float:
+    """Julian Day number for a UTC datetime."""
+    a = dt_utc.year
+    m = dt_utc.month
+    day = dt_utc.day + (dt_utc.hour + dt_utc.minute / 60 + dt_utc.second / 3600) / 24
+    if m <= 2:
+        a -= 1
+        m += 12
+    aa = a // 100
+    bb = 2 - aa + aa // 4
+    return int(365.25 * (a + 4716)) + int(30.6001 * (m + 1)) + day + bb - 1524.5
+
+
+def compute_sun_times(date_str: str, lat: float, lon: float, tz_name: str) -> dict:
+    """Compute solar event unix timestamps for an arbitrary local date.
+
+    Uses the NOAA solar position algorithm. No network access required.
+    dawn/dusk use civil twilight (sun 6 deg below horizon), matching the
+    definition Home Assistant's sun.sun entity uses, so computed past dates
+    stay consistent with the live "today" values.
+
+    Returns a dict with the same shape as extract_sun_times (sunrise, sunset,
+    solar_noon, dawn, dusk). Events that don't occur (polar day/night) are
+    omitted.
+    """
+    try:
+        tz = zoneinfo.ZoneInfo(tz_name) if tz_name else datetime.timezone.utc
+    except Exception:
+        tz = datetime.timezone.utc
+
+    y, mo, d = (int(x) for x in date_str.split("-"))
+    midnight_local = datetime.datetime(y, mo, d, 0, 0, 0, tzinfo=tz)
+    noon_local = datetime.datetime(y, mo, d, 12, 0, 0, tzinfo=tz)
+    jd = _julian_day(noon_local.astimezone(datetime.timezone.utc))
+    jc = (jd - 2451545.0) / 36525.0  # Julian century
+
+    gml = (280.46646 + jc * (36000.76983 + jc * 0.0003032)) % 360  # geom mean long
+    gma = 357.52911 + jc * (35999.05029 - 0.0001537 * jc)          # geom mean anomaly
+    ecc = 0.016708634 - jc * (0.000042037 + 0.0000001267 * jc)     # orbit eccentricity
+    soc = (math.sin(math.radians(gma)) * (1.914602 - jc * (0.004817 + 0.000014 * jc))
+           + math.sin(math.radians(2 * gma)) * (0.019993 - 0.000101 * jc)
+           + math.sin(math.radians(3 * gma)) * 0.000289)           # sun eqn of center
+    app_long = gml + soc - 0.00569 - 0.00478 * math.sin(math.radians(125.04 - 1934.136 * jc))
+    obliq = 23 + (26 + ((21.448 - jc * (46.815 + jc * (0.00059 - jc * 0.001813)))) / 60) / 60
+    obliq_corr = obliq + 0.00256 * math.cos(math.radians(125.04 - 1934.136 * jc))
+    decl = math.degrees(math.asin(
+        math.sin(math.radians(obliq_corr)) * math.sin(math.radians(app_long))))
+    vary = math.tan(math.radians(obliq_corr / 2)) ** 2
+    eot = 4 * math.degrees(  # equation of time, minutes
+        vary * math.sin(2 * math.radians(gml))
+        - 2 * ecc * math.sin(math.radians(gma))
+        + 4 * ecc * vary * math.sin(math.radians(gma)) * math.cos(2 * math.radians(gml))
+        - 0.5 * vary * vary * math.sin(4 * math.radians(gml))
+        - 1.25 * ecc * ecc * math.sin(2 * math.radians(gma))
+    )
+
+    tz_offset_hours = noon_local.utcoffset().total_seconds() / 3600
+    solar_noon_min = 720 - 4 * lon - eot + tz_offset_hours * 60
+
+    def hour_angle(elev_deg: float):
+        """Hour angle (deg) for the sun at the given elevation below horizon."""
+        cos_h = (math.cos(math.radians(90 - elev_deg))
+                 - math.sin(math.radians(lat)) * math.sin(math.radians(decl))) \
+                / (math.cos(math.radians(lat)) * math.cos(math.radians(decl)))
+        if cos_h > 1 or cos_h < -1:
+            return None  # sun never reaches this angle on this date
+        return math.degrees(math.acos(cos_h))
+
+    def event_ts(minutes_from_midnight: float) -> float:
+        return (midnight_local + datetime.timedelta(minutes=minutes_from_midnight)).timestamp()
+
+    out = {"solar_noon": event_ts(solar_noon_min)}
+    ha_sun = hour_angle(-0.833)   # standard sunrise/sunset (refraction + sun radius)
+    if ha_sun is not None:
+        out["sunrise"] = event_ts(solar_noon_min - ha_sun * 4)
+        out["sunset"] = event_ts(solar_noon_min + ha_sun * 4)
+    ha_civil = hour_angle(-6.0)   # civil twilight = HA dawn/dusk
+    if ha_civil is not None:
+        out["dawn"] = event_ts(solar_noon_min - ha_civil * 4)
+        out["dusk"] = event_ts(solar_noon_min + ha_civil * 4)
+    return out
+
+
+def compute_moon_phase(date_str: str) -> str:
+    """Compute the moon phase for a local date (evaluated at noon UTC).
+
+    Returns one of the eight phase strings used by HA's sensor.moon, so the
+    arc's moon glyph renders identically to the live value. No network needed.
+    """
+    y, mo, d = (int(x) for x in date_str.split("-"))
+    jd = _julian_day(datetime.datetime(y, mo, d, 12, 0, 0, tzinfo=datetime.timezone.utc))
+    t = (jd - 2451545.0) / 36525.0
+    mean_d = 297.8501921 + 445267.1114034 * t - 0.0018819 * t * t  # mean elongation
+    sun_anom = 357.5291092 + 35999.0502909 * t                     # sun mean anomaly
+    moon_anom = 134.9633964 + 477198.8675055 * t                   # moon mean anomaly
+    # True elongation: mean plus the dominant periodic terms (Meeus).
+    elong = (mean_d
+             + 6.289 * math.sin(math.radians(moon_anom))
+             - 2.100 * math.sin(math.radians(sun_anom))
+             + 1.274 * math.sin(math.radians(2 * mean_d - moon_anom))
+             + 0.658 * math.sin(math.radians(2 * mean_d))
+             + 0.214 * math.sin(math.radians(2 * moon_anom))
+             + 0.110 * math.sin(math.radians(mean_d))) % 360
+    frac = elong / 360.0  # 0=new, .25=first quarter, .5=full, .75=last quarter
+    if frac < 0.0625 or frac >= 0.9375:
+        return "new_moon"
+    if frac < 0.1875:
+        return "waxing_crescent"
+    if frac < 0.3125:
+        return "first_quarter"
+    if frac < 0.4375:
+        return "waxing_gibbous"
+    if frac < 0.5625:
+        return "full_moon"
+    if frac < 0.6875:
+        return "waning_gibbous"
+    if frac < 0.8125:
+        return "last_quarter"
+    return "waning_crescent"
 
 
 # ── Panel history for time slider ────────────────────────────────────────
