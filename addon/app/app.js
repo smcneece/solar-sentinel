@@ -65,9 +65,12 @@ export async function fetchPanels() {
   }
 }
 
-async function fetchSun() {
+async function fetchSun(dateStr) {
   try {
-    const resp = await fetch(`${window.BASE}/api/sun`);
+    const url = dateStr
+      ? `${window.BASE}/api/sun?date=${dateStr}`
+      : `${window.BASE}/api/sun`;
+    const resp = await fetch(url);
     if (!resp.ok) return;
     st.sunData = await resp.json();
     const [arcMin, arcMax] = sunArcMinutes();
@@ -273,7 +276,13 @@ function onLive() {
   updateSliderToNow();
   renderPanels(st.panels);
   requestAnimationFrame(fitViewGrid);
-  if (st.sunData) renderSunArc(st.sunData, null, st.weather);
+  fetchSun().then(() => {
+    const [arcMin, arcMax] = sunArcMinutes();
+    const slider = document.getElementById('time-slider');
+    slider.min = arcMin;
+    slider.max = arcMax;
+    updateSliderToNow();
+  });
   const liveOnline = (st.panels || []).filter(p => p.status === 'online');
   document.getElementById('total-power').textContent = fmtW(liveOnline.reduce((s, p) => s + p.power_w, 0));
   const total = (st.panels || []).length;
@@ -355,6 +364,12 @@ async function onDateChange(preserveSlider = false) {
   if (!dateStr) return;
   st.historyCache = {};
   const slider = document.getElementById('time-slider');
+
+  await fetchSun(dateStr === todayStr() ? undefined : dateStr);
+  const [arcMin, arcMax] = sunArcMinutes();
+  slider.min = arcMin;
+  slider.max = arcMax;
+
   if (dateStr !== todayStr() && !preserveSlider) {
     slider.value = slider.min;
   }
@@ -670,7 +685,10 @@ async function init() {
     } catch (err) { alert('Import failed: ' + err.message); }
   });
 
-  setInterval(fetchSun, 5 * 60 * 1000);
+  setInterval(() => {
+    const dp = document.getElementById('date-picker');
+    if (!dp.value || dp.value === todayStr()) fetchSun();
+  }, 5 * 60 * 1000);
   setInterval(fetchWeather, 60 * 60 * 1000);
 
   document.querySelectorAll('.chart-tab').forEach(btn => {

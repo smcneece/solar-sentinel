@@ -86,9 +86,9 @@ Should work with any solar integration already configured in the Energy Dashboar
 - Stale overnight sensor readings are suppressed using the same threshold as the panel grid
 
 ### Sun Arc
-- Animated sun arc showing dawn, sunrise, solar noon, sunset, and dusk for today
+- Animated sun arc showing dawn, sunrise, solar noon, sunset, and dusk; times update correctly when viewing a past date, computed from your installation's latitude and longitude so historical days show their actual solar events rather than today's
 - Night arc extension shows the underground sun path before dawn and after dusk, so the arc wraps the full day
-- Optional moon phase icon in the pre-dawn area; uses the HA Moon integration if installed (gracefully absent if not)
+- Optional moon phase icon in the pre-dawn area; phase is accurate for the selected date whether viewing today or a past day; uses the HA Moon integration if installed for today, computed internally for past dates (gracefully absent if not configured)
 - Current sun position indicator tracks the sun in real time or matches the time slider position in history mode
 
 ### Time Slider and History
@@ -278,6 +278,14 @@ See [CHANGELOG.md](CHANGELOG.md) for the full version history.
 ## Data & Backups
 
 Solar Sentinel stores panel layout and settings (custom names, refresh interval) in a single JSON file managed by the Home Assistant Supervisor. This file is separate from the add-on code and is included automatically in standard Home Assistant full backups; no special steps required. Custom panel names written back to the HA entity registry are part of HA's own data and are backed up with HA as normal.
+
+---
+
+## Contributors
+
+| Contributor | Contribution |
+|-------------|-------------|
+| [@sg1888](https://github.com/sg1888) | Sun arc historical date support: sunrise, sunset, dawn, dusk, solar noon, and moon phase now computed correctly for any past date (v2026.06.8) |
 
 ---
 

@@ -5,6 +5,11 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.06.8 - June 8, 2026
+
+- Fixed sun arc showing today's sunrise, sunset, dawn, dusk, and solar noon when viewing a past date; times (and moon phase) are now computed for the selected date using the installation's latitude/longitude read from HA's config; today still uses the live sun.sun entity for accuracy; falls back to live values if HA does not expose coordinates (thanks @sg1888)
+- Fixed panel detail history chart showing misleadingly low power values in the 6-month and 1-year views; those ranges use daily statistics buckets, and the daily mean averages in all nighttime hours at 0W, dragging apparent peak output down to roughly a third of actual capacity; the 6m and 1y views now plot the daily maximum instead, matching the peaks visible in the 7d, 30d, and 90d views
+
 ## v2026.06.7 - June 7, 2026
 
 - Fixed panel colors in history/slider mode not respecting the "Peak panel output (W)" setting; the live view gets colors from the server which applied the setting correctly, but the client-side recalculation used for history scrubbing kept a hardcoded 150W relative-average formula instead of the absolute threshold formula the server uses; both paths now use the same calculation
@@ -12,6 +17,7 @@ For full release notes and details on each version, see the [GitHub Releases pag
 - Fixed grid import/export chart not refreshing during the live update cycle; the production chart updated correctly but the grid chart was missing from the refresh loop entirely and only updated when switching tabs or dates
 - Fixed panel grid layout briefly jumping between the auto-fitted size and the aspect-ratio fallback on every slider tick; the initial load stability check (which waits for the sun arc to render before locking in cell dimensions) was re-running on each slider update because the grid DOM is rebuilt on every render; the check now runs only once on initial page load
 - Fixed panel name text being cut off after the first word in the positioned grid view; a browser rendering quirk caused the name element to shrink narrower than its container when using webkit line-clamp inside a flex column, so only the first word fit before the overflow clip; the name now correctly spans the full card width; landscape panels stack content from the top so the name is always visible before watts and kWh even when the card is short, while portrait panels keep vertical centering since they have ample height
+- Fixed portrait panels in the layout editor appearing top-aligned instead of vertically centered; the portrait/landscape CSS class that controls alignment was applied in the view mode render path but missing from the editor render path
 
 ## v2026.06.6 - June 6, 2026
 
