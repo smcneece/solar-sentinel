@@ -5,7 +5,7 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
-## v2026.06.8 - June 8, 2026
+## v2026.06.8 - June 9, 2026
 
 - Fixed sun arc showing today's sunrise, sunset, dawn, dusk, and solar noon when viewing a past date; times (and moon phase) are now computed for the selected date using the installation's latitude/longitude read from HA's config; today still uses the live sun.sun entity for accuracy; falls back to live values if HA does not expose coordinates (thanks @sg1888)
 - Fixed panel detail history chart showing misleadingly low power values in the 6-month and 1-year views; those ranges use daily statistics buckets, and the daily mean averages in all nighttime hours at 0W, dragging apparent peak output down to roughly a third of actual capacity; the 6m and 1y views now plot the daily maximum instead, matching the peaks visible in the 7d, 30d, and 90d views
