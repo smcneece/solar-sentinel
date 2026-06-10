@@ -1,5 +1,5 @@
 import { st, FINE_W, FINE_H } from './state.js';
-import { fmtW, todayStr, currentMinutes, sliderToTimestamp, applyHistoryToPanels, recolorPanels } from './utils.js';
+import { fmtW, todayStr, currentMinutes, sliderToTimestamp, applyHistoryToPanels, recolorPanels, tzMinutes, tzWallToMs } from './utils.js';
 import { renderSunArc } from './arc.js';
 import { applyLeftPanelVisibility, fetchArrayChart, fetchGridChart, fetchBatteryChart, drawArrayChart, drawGridChart, drawBatterySocChart, drawBatteryKwhChart, initChartTooltip, initGridChartTooltip, initBatteryChartTooltip } from './charts.js';
 import { renderPanels, fitViewGrid, openPanelModal, switchPanelTab, loadPanelChart, savePanelRename } from './panels.js';
@@ -27,7 +27,7 @@ function sunArcMinutes() {
   if (!sun || !sun.dawn || !sun.dusk) return [0, 1440];
   const dayRange = sun.dusk - sun.dawn;
   const extMin = Math.round((dayRange * 0.16) / 60);
-  const toMin = ts => { const d = new Date(ts * 1000); return d.getHours() * 60 + d.getMinutes(); };
+  const toMin = ts => tzMinutes(ts * 1000);
   const arcMin = Math.max(0,    toMin(sun.dawn) - extMin);
   const arcMax = Math.min(1440, toMin(sun.dusk)  + extMin);
   if (arcMin >= arcMax) return [0, 1440];
@@ -78,7 +78,7 @@ async function fetchSun(dateStr) {
     slider.min = arcMin;
     slider.max = arcMax;
     const currentMs = st.sliderActive ? sliderToTimestamp(slider.value) : null;
-    renderSunArc(st.sunData, currentMs, st.weather);
+    renderSunArc(st.sunData, currentMs, weatherForView());
   } catch (e) {
     console.error('fetchSun:', e);
   }
@@ -94,11 +94,19 @@ async function fetchWeather() {
       const currentMs = st.sliderActive
         ? sliderToTimestamp(parseInt(document.getElementById('time-slider').value))
         : null;
-      renderSunArc(st.sunData, currentMs, st.weather);
+      renderSunArc(st.sunData, currentMs, weatherForView());
     }
   } catch (e) {
     console.error('fetchWeather:', e);
   }
+}
+
+// HA only exposes the current forecast (today/tomorrow) and stores no history,
+// so the forecast applies only when viewing today; hide it on past dates.
+function weatherForView() {
+  const dp = document.getElementById('date-picker');
+  const dateStr = (dp && dp.value) ? dp.value : todayStr();
+  return dateStr === todayStr() ? st.weather : null;
 }
 
 async function fetchHistory(dateStr) {
@@ -116,6 +124,24 @@ async function fetchHistory(dateStr) {
   }
 }
 
+async function fetchDisplayTz() {
+  // Load the HA server timezone. The active display zone is derived from it plus
+  // the user's "use local timezone" preference (applied in fetchSettings).
+  try {
+    const resp = await fetch(`${window.BASE}/api/about`);
+    if (!resp.ok) return;
+    const d = await resp.json();
+    if (d.ha_tz) st.haTz = d.ha_tz;
+  } catch (e) { /* ignore */ }
+  applyDisplayTz();
+}
+
+// Default shows the HA server zone; with useLocalTz, displayTz is null so the
+// tz helpers fall back to the browser's zone.
+function applyDisplayTz() {
+  st.displayTz = st.useLocalTz ? null : (st.haTz || null);
+}
+
 async function fetchSettings() {
   try {
     const resp = await fetch(`${window.BASE}/api/settings`);
@@ -129,6 +155,8 @@ async function fetchSettings() {
     st.minAvgW = s.min_avg_w ?? 5;
     st.peakPanelW = s.peak_panel_w ?? 300;
     st.invertBatteryPower = s.invert_battery_power === true;
+    st.useLocalTz = s.use_local_tz === true;
+    applyDisplayTz();
     applyLeftPanelVisibility();
   } catch (e) { /* ignore */ }
 }
@@ -152,7 +180,7 @@ function scheduleRefresh() {
     await fetchPanels();
     if (!st.sliderActive) {
       updateSliderToNow();
-      if (st.sunData) renderSunArc(st.sunData, null, st.weather);
+      if (st.sunData) renderSunArc(st.sunData, null, weatherForView());
       if (st.chartRange === 'today') fetchArrayChart();
       if (st.showGridChart && st.gridChartRange === 'today') fetchGridChart();
       if (st.batteryAvailable) {
@@ -198,11 +226,10 @@ function playTick() {
   const h = Math.floor(val / 60), m = val % 60;
   document.getElementById('slider-label').textContent =
     `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-  if (st.sunData) renderSunArc(st.sunData, sliderToTimestamp(val), st.weather);
+  if (st.sunData) renderSunArc(st.sunData, sliderToTimestamp(val), weatherForView());
   const history = st.historyCache[dateStr];
   if (history) {
-    const [y, mo, d] = dateStr.split('-').map(Number);
-    const sliderTs = new Date(y, mo - 1, d, h, m).getTime();
+    const sliderTs = tzWallToMs(dateStr, val);
     let panels = applyHistoryToPanels(st.panels, history, sliderTs);
     panels = recolorPanels(panels);
     const online = panels.filter(p => p.status === 'online' && p.power_w > 0);
@@ -326,7 +353,7 @@ async function onSliderInput() {
       updateSliderToNow();
       renderPanels(st.panels);
       requestAnimationFrame(fitViewGrid);
-      if (st.sunData) renderSunArc(st.sunData, null, st.weather);
+      if (st.sunData) renderSunArc(st.sunData, null, weatherForView());
       return;
     }
   }
@@ -338,10 +365,9 @@ async function onSliderInput() {
   const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
   label.textContent = timeStr;
 
-  renderSunArc(st.sunData, sliderToTimestamp(val), st.weather);
+  renderSunArc(st.sunData, sliderToTimestamp(val), weatherForView());
 
-  const [y, mo, d] = dateStr.split('-').map(Number);
-  const sliderTs = new Date(y, mo - 1, d, h, m).getTime();
+  const sliderTs = tzWallToMs(dateStr, val);
 
   const history = await fetchHistory(dateStr);
   label.textContent = history && history.statistics_fallback ? timeStr + ' (hourly)' : timeStr;
@@ -411,6 +437,7 @@ async function openSettings() {
     document.getElementById('setting-show-panel-names').checked = s.show_panel_names !== false;
     document.getElementById('setting-show-panel-unit').checked = s.show_panel_unit !== false;
     document.getElementById('setting-invert-battery').checked = s.invert_battery_power === true;
+    document.getElementById('setting-local-tz').checked = s.use_local_tz === true;
     document.getElementById('setting-name-strip').value = s.name_strip || '';
   } catch (e) { console.error('openSettings:', e); }
 }
@@ -430,6 +457,7 @@ async function saveSettings() {
         show_panel_names: document.getElementById('setting-show-panel-names').checked,
         show_panel_unit: document.getElementById('setting-show-panel-unit').checked,
         invert_battery_power: document.getElementById('setting-invert-battery').checked,
+        use_local_tz: document.getElementById('setting-local-tz').checked,
         name_strip: document.getElementById('setting-name-strip').value.trim(),
       }),
     });
@@ -442,11 +470,33 @@ async function saveSettings() {
     st.invertBatteryPower = document.getElementById('setting-invert-battery').checked;
     st.minAvgW = Math.max(0, parseInt(document.getElementById('setting-min-avg-w').value) || 0);
     st.peakPanelW = Math.max(0, parseInt(document.getElementById('setting-peak-panel-w').value) || 0);
+
+    // Apply the timezone preference and refresh time-based views immediately.
+    const prevTz = st.displayTz;
+    st.useLocalTz = document.getElementById('setting-local-tz').checked;
+    applyDisplayTz();
+    if (st.displayTz !== prevTz) refreshTimeViews();
+
     applyLeftPanelVisibility();
     renderPanels(st.panels);
     requestAnimationFrame(fitViewGrid);
     closeModal('settings-modal');
   } catch (e) { console.error('saveSettings:', e); }
+}
+
+// Re-render everything whose labels/positions depend on the display timezone.
+function refreshTimeViews() {
+  if (st.sunData) {
+    const slider = document.getElementById('time-slider');
+    const [arcMin, arcMax] = sunArcMinutes();
+    slider.min = arcMin;
+    slider.max = arcMax;
+    renderSunArc(st.sunData, st.sliderActive ? sliderToTimestamp(slider.value) : null, weatherForView());
+    if (!st.sliderActive) updateSliderToNow();
+  }
+  fetchArrayChart();
+  if (st.gridAvailable) fetchGridChart();
+  if (st.batteryAvailable) fetchBatteryChart();
 }
 
 // ── Battery status ────────────────────────────────────────────────────────
@@ -539,13 +589,17 @@ function switchLeftPanelTab(tab) {
 // ── Init ──────────────────────────────────────────────────────────────────
 
 async function init() {
+  // Resolve the display timezone and user prefs first, so todayStr() /
+  // currentMinutes() below use the correct zone.
+  await fetchDisplayTz();
+  await fetchSettings();
+
   document.getElementById('date-picker').value = todayStr();
   document.getElementById('date-picker').max = todayStr();
   const _initSlider = document.getElementById('time-slider');
   _initSlider.max = 1440;
   _initSlider.value = currentMinutes();
 
-  await fetchSettings();
   await fetchGrid();
   await fetchPanels();
   await fetchSun();
@@ -737,7 +791,7 @@ async function init() {
     }
     clearTimeout(_resizeTimer);
     _resizeTimer = setTimeout(fitViewGrid, 100);
-    if (st.sunData) renderSunArc(st.sunData, st.sliderActive ? sliderToTimestamp(parseInt(document.getElementById('time-slider').value)) : null, st.weather);
+    if (st.sunData) renderSunArc(st.sunData, st.sliderActive ? sliderToTimestamp(parseInt(document.getElementById('time-slider').value)) : null, weatherForView());
     if (st.editMode) renderEditMode(st.panels);
   });
 

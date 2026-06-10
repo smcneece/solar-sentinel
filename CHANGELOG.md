@@ -5,6 +5,12 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.06.9 - June 10, 2026
+
+- Fixed all times (sun arc, time slider, and the production/grid/battery charts) rendering in the browser's timezone instead of the Home Assistant server's; when the browser and server were in different timezones, arc times were shifted and chart peaks landed at the wrong hour (e.g. production peaking at 3 PM instead of solar noon); on past dates this timezone mismatch also caused the area under the arc to fully shade with no sun ball, because the slider position was computed in the browser zone while the arc times were in the server zone; everything now uses the HA server timezone consistently.
+- Added a "Show times in my browser's timezone" setting (below "Show W unit on panels"); times use the Home Assistant server timezone by default, and enabling this shows them in the browser's local timezone; the change applies immediately to the arc, slider, and charts.
+- Fixed the weather forecast icons continuing to show today's and tomorrow's forecast when viewing a past date; HA only exposes the current forecast and stores no history, so the icons now appear only when viewing today.
+
 ## v2026.06.8 - June 9, 2026
 
 - Fixed sun arc showing today's sunrise, sunset, dawn, dusk, and solar noon when viewing a past date; times (and moon phase) are now computed for the selected date using the installation's latitude/longitude read from HA's config; today still uses the live sun.sun entity for accuracy; falls back to live values if HA does not expose coordinates (thanks @sg1888)
