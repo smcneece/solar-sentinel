@@ -49,6 +49,4 @@ export const st = {
   playbackTimer: null,
   weather: null,
   haTz: null,        // HA server IANA timezone, from /api/about
-  displayTz: null,   // active display zone: haTz, or null for the browser zone
-  useLocalTz: false, // user preference: show times in the browser zone
 };

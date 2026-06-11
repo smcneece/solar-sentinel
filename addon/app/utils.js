@@ -2,10 +2,12 @@ import { st, FINE_W, FINE_H } from './state.js';
 
 // ── Timezone helpers ──────────────────────────────────────────────────────
 // All time display and minutes-of-day math uses the Home Assistant server's
-// timezone, not the browser's. st.displayTz holds the active IANA zone (the HA
-// zone by default, or null to use the browser zone when the user opts in).
+// timezone (the array's physical location), not the browser's. The active zone
+// is st.haTz, loaded from /api/about at startup.
 
-function _tz() { return st.displayTz || undefined; }  // undefined => browser zone
+// Returns undefined only until haTz loads, so Intl falls back to the browser
+// zone briefly at startup, then uses the HA server zone.
+export function _tz() { return st.haTz || undefined; }
 
 // Wall-clock parts of an instant (unix ms) in the display timezone.
 export function tzParts(ms) {

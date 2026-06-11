@@ -125,21 +125,13 @@ async function fetchHistory(dateStr) {
 }
 
 async function fetchDisplayTz() {
-  // Load the HA server timezone. The active display zone is derived from it plus
-  // the user's "use local timezone" preference (applied in fetchSettings).
+  // Load the HA server timezone; all time display/math uses it.
   try {
     const resp = await fetch(`${window.BASE}/api/about`);
     if (!resp.ok) return;
     const d = await resp.json();
     if (d.ha_tz) st.haTz = d.ha_tz;
   } catch (e) { /* ignore */ }
-  applyDisplayTz();
-}
-
-// Default shows the HA server zone; with useLocalTz, displayTz is null so the
-// tz helpers fall back to the browser's zone.
-function applyDisplayTz() {
-  st.displayTz = st.useLocalTz ? null : (st.haTz || null);
 }
 
 async function fetchSettings() {
@@ -155,8 +147,6 @@ async function fetchSettings() {
     st.minAvgW = s.min_avg_w ?? 5;
     st.peakPanelW = s.peak_panel_w ?? 300;
     st.invertBatteryPower = s.invert_battery_power === true;
-    st.useLocalTz = s.use_local_tz === true;
-    applyDisplayTz();
     applyLeftPanelVisibility();
   } catch (e) { /* ignore */ }
 }
@@ -437,7 +427,6 @@ async function openSettings() {
     document.getElementById('setting-show-panel-names').checked = s.show_panel_names !== false;
     document.getElementById('setting-show-panel-unit').checked = s.show_panel_unit !== false;
     document.getElementById('setting-invert-battery').checked = s.invert_battery_power === true;
-    document.getElementById('setting-local-tz').checked = s.use_local_tz === true;
     document.getElementById('setting-name-strip').value = s.name_strip || '';
   } catch (e) { console.error('openSettings:', e); }
 }
@@ -457,7 +446,6 @@ async function saveSettings() {
         show_panel_names: document.getElementById('setting-show-panel-names').checked,
         show_panel_unit: document.getElementById('setting-show-panel-unit').checked,
         invert_battery_power: document.getElementById('setting-invert-battery').checked,
-        use_local_tz: document.getElementById('setting-local-tz').checked,
         name_strip: document.getElementById('setting-name-strip').value.trim(),
       }),
     });
@@ -470,33 +458,11 @@ async function saveSettings() {
     st.invertBatteryPower = document.getElementById('setting-invert-battery').checked;
     st.minAvgW = Math.max(0, parseInt(document.getElementById('setting-min-avg-w').value) || 0);
     st.peakPanelW = Math.max(0, parseInt(document.getElementById('setting-peak-panel-w').value) || 0);
-
-    // Apply the timezone preference and refresh time-based views immediately.
-    const prevTz = st.displayTz;
-    st.useLocalTz = document.getElementById('setting-local-tz').checked;
-    applyDisplayTz();
-    if (st.displayTz !== prevTz) refreshTimeViews();
-
     applyLeftPanelVisibility();
     renderPanels(st.panels);
     requestAnimationFrame(fitViewGrid);
     closeModal('settings-modal');
   } catch (e) { console.error('saveSettings:', e); }
-}
-
-// Re-render everything whose labels/positions depend on the display timezone.
-function refreshTimeViews() {
-  if (st.sunData) {
-    const slider = document.getElementById('time-slider');
-    const [arcMin, arcMax] = sunArcMinutes();
-    slider.min = arcMin;
-    slider.max = arcMax;
-    renderSunArc(st.sunData, st.sliderActive ? sliderToTimestamp(slider.value) : null, weatherForView());
-    if (!st.sliderActive) updateSliderToNow();
-  }
-  fetchArrayChart();
-  if (st.gridAvailable) fetchGridChart();
-  if (st.batteryAvailable) fetchBatteryChart();
 }
 
 // ── Battery status ────────────────────────────────────────────────────────

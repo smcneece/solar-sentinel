@@ -1,5 +1,5 @@
 import { st, FINE_W, FINE_H } from './state.js';
-import { fmtW, fmtWh, getSpan, stripName } from './utils.js';
+import { fmtW, fmtWh, getSpan, stripName, tzWallToMs, _tz } from './utils.js';
 
 let _initialFitDone = false;
 let _layoutBounds = null; // bounding box of placed content, set by renderGridView
@@ -204,9 +204,9 @@ export async function loadPanelDetails(entityId) {
     const sliderVal = parseInt(document.getElementById('time-slider').value);
     const dateStr = document.getElementById('date-picker').value;
     if (dateStr) {
-      const [y, mo, d] = dateStr.split('-').map(Number);
-      const h = Math.floor(sliderVal / 60), m = sliderVal % 60;
-      url += `&ts=${new Date(y, mo - 1, d, h, m).getTime()}`;
+      // Build the instant in the HA server timezone so the server receives the
+      // correct UTC moment for cross-timezone users.
+      url += `&ts=${tzWallToMs(dateStr, sliderVal)}`;
     }
   }
 
@@ -217,7 +217,7 @@ export async function loadPanelDetails(entityId) {
     if (tsEl) {
       if (data.historical_ts) {
         const d = new Date(data.historical_ts);
-        tsEl.textContent = `Historical: ${d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`;
+        tsEl.textContent = `Historical: ${d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', timeZone: _tz()})}`;
         tsEl.style.display = '';
       } else {
         tsEl.style.display = 'none';
@@ -287,8 +287,8 @@ export function fmtDetailValue(s) {
   if (s.device_class === 'timestamp') {
     try {
       const d = new Date(s.value);
-      const date = d.toLocaleDateString([], {month: 'numeric', day: 'numeric', year: 'numeric'});
-      const time = d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+      const date = d.toLocaleDateString([], {month: 'numeric', day: 'numeric', year: 'numeric', timeZone: _tz()});
+      const time = d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', timeZone: _tz()});
       return `${date} ${time}`;
     } catch { return s.value; }
   }
@@ -358,8 +358,8 @@ export function renderPanelChart(data) {
     const ts = minTs + (tsRange / xCount) * i, x = px(ts).toFixed(1);
     const d = new Date(ts);
     const lbl = numDays <= 92
-      ? d.toLocaleDateString([], {month: 'short', day: 'numeric'})
-      : d.toLocaleDateString([], {month: 'short'});
+      ? d.toLocaleDateString([], {month: 'short', day: 'numeric', timeZone: _tz()})
+      : d.toLocaleDateString([], {month: 'short', timeZone: _tz()});
     xSvg += `<line x1="${x}" y1="${MT}" x2="${x}" y2="${MT + CH}" stroke="var(--border)" stroke-width="0.5"/>
       <text x="${x}" y="${MT + CH + 16}" text-anchor="middle" font-size="9" fill="var(--arc-label)">${lbl}</text>`;
   }
