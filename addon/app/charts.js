@@ -1,5 +1,5 @@
 import { st } from './state.js';
-import { todayStr } from './utils.js';
+import { todayStr, tzDayStartMs, tzHourMin, fmtDateTz } from './utils.js';
 
 function drawCrosshair(canvas, x, padT, chartH) {
   const dpr = window.devicePixelRatio || 1;
@@ -25,15 +25,14 @@ function clearCrosshair(canvas) {
 function getTooltipTimeHeader(pt, range) {
   const ts = pt.ts_ms;
   if (!ts) return pt.label || '';
-  const d = new Date(ts);
   if (range === 'today') {
-    const h = d.getHours(), nh = (h + 1) % 24;
+    const { hour: h } = tzHourMin(ts), nh = (h + 1) % 24;
     const fmt = h2 => `${h2 % 12 || 12}:00 ${h2 < 12 ? 'AM' : 'PM'}`;
     return `${fmt(h)} – ${fmt(nh)}`;
   }
-  if (range === 'week')  return `Week of ${d.toLocaleString('en-US', {month: 'short'})} ${d.getDate()}`;
-  if (range === 'month') return d.toLocaleString('en-US', {month: 'long', year: 'numeric'});
-  return String(d.getFullYear());
+  if (range === 'week')  return `Week of ${fmtDateTz(ts, {month: 'short'})} ${fmtDateTz(ts, {day: 'numeric'})}`;
+  if (range === 'month') return fmtDateTz(ts, {month: 'long', year: 'numeric'});
+  return fmtDateTz(ts, {year: 'numeric'});
 }
 
 function _drawChartMessage(msg) {
@@ -180,9 +179,7 @@ export function drawGridChart(points, hasExport) {
   ctx.clearRect(0, 0, W, H);
 
   if (st.gridChartRange === 'today' && points[0]?.ts_ms) {
-    const d0 = new Date(points[0].ts_ms);
-    d0.setHours(0, 0, 0, 0);
-    const dayStartMs = d0.getTime(), dayMs = 86400 * 1000;
+    const dayStartMs = tzDayStartMs(points[0].ts_ms), dayMs = 86400 * 1000;
     const toX  = ts  => padL + ((ts - dayStartMs) / dayMs) * chartW;
     const toY  = kwh => zeroY - (kwh / maxPos) * posH;
 
@@ -345,9 +342,7 @@ export function initGridChartTooltip() {
 
     let idx, hitX;
     if (st.gridChartRange === 'today' && points[0]?.ts_ms) {
-      const d0 = new Date(points[0].ts_ms);
-      d0.setHours(0, 0, 0, 0);
-      const dayStartMs = d0.getTime(), dayMs = 86400 * 1000;
+      const dayStartMs = tzDayStartMs(points[0].ts_ms), dayMs = 86400 * 1000;
       const mouseTs = dayStartMs + ((mouseX - padL) / chartW) * dayMs;
       idx = 0; let minDist = Infinity;
       points.forEach((p, i) => { const d = Math.abs(p.ts_ms - mouseTs); if (d < minDist) { minDist = d; idx = i; } });
@@ -454,9 +449,7 @@ export function drawArrayChart(points, range) {
   ctx.clearRect(0, 0, W, H);
 
   if (range === 'today' && points[0]?.ts_ms) {
-    const d0 = new Date(points[0].ts_ms);
-    d0.setHours(0, 0, 0, 0);
-    const dayStartMs = d0.getTime();
+    const dayStartMs = tzDayStartMs(points[0].ts_ms);
     const dayMs = 86400 * 1000;
     const toX = ts => padL + ((ts - dayStartMs) / dayMs) * chartW;
     const toY = kwh => padT + chartH - (kwh / maxKwh) * chartH;
@@ -629,9 +622,7 @@ export function drawBatterySocChart(points) {
   const chartH = H - padT - padB;
 
   // Use midnight of the first point's date as day start
-  const d0 = new Date(points[0].ts_ms);
-  d0.setHours(0, 0, 0, 0);
-  const dayStartMs = d0.getTime();
+  const dayStartMs = tzDayStartMs(points[0].ts_ms);
   const dayMs = 86400 * 1000;
 
   const toX = ts => padL + ((ts - dayStartMs) / dayMs) * chartW;
@@ -780,9 +771,7 @@ export function initBatteryChartTooltip() {
     let barCenterX, pt, html;
 
     if (st.batteryChartType === 'soc') {
-      const d0 = new Date(points[0].ts_ms);
-      d0.setHours(0, 0, 0, 0);
-      const dayStartMs = d0.getTime();
+      const dayStartMs = tzDayStartMs(points[0].ts_ms);
       const dayMs = 86400 * 1000;
       const mouseTs = dayStartMs + ((mouseX - padL) / chartW) * dayMs;
       let nearestIdx = 0, minDist = Infinity;
@@ -792,8 +781,7 @@ export function initBatteryChartTooltip() {
       });
       pt = points[nearestIdx];
       barCenterX = padL + ((pt.ts_ms - dayStartMs) / dayMs) * chartW;
-      const d = new Date(pt.ts_ms);
-      const h = d.getHours(), m = d.getMinutes();
+      const { hour: h, minute: m } = tzHourMin(pt.ts_ms);
       const header = `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
       html = `<div style="font-weight:600;margin-bottom:0.25rem">${header}</div>`;
       html += `<div style="display:flex;align-items:center;gap:5px">
@@ -857,9 +845,7 @@ export function initChartTooltip() {
 
     let idx, hitX;
     if (st.chartRange === 'today' && points[0]?.ts_ms) {
-      const d0 = new Date(points[0].ts_ms);
-      d0.setHours(0, 0, 0, 0);
-      const dayStartMs = d0.getTime(), dayMs = 86400 * 1000;
+      const dayStartMs = tzDayStartMs(points[0].ts_ms), dayMs = 86400 * 1000;
       const mouseTs = dayStartMs + ((mouseX - padL) / chartW) * dayMs;
       idx = 0;
       let minDist = Infinity;

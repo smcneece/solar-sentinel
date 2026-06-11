@@ -1,5 +1,72 @@
 import { st, FINE_W, FINE_H } from './state.js';
 
+// ── Timezone helpers ──────────────────────────────────────────────────────
+// All time display and minutes-of-day math uses the Home Assistant server's
+// timezone (the array's physical location), not the browser's. The active zone
+// is st.haTz, loaded from /api/about at startup.
+
+// Returns undefined only until haTz loads, so Intl falls back to the browser
+// zone briefly at startup, then uses the HA server zone.
+export function _tz() { return st.haTz || undefined; }
+
+// Wall-clock parts of an instant (unix ms) in the display timezone.
+export function tzParts(ms) {
+  const o = {};
+  for (const p of new Intl.DateTimeFormat('en-US', {
+    timeZone: _tz(), hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(ms)) {
+    if (p.type !== 'literal') o[p.type] = p.value;
+  }
+  if (o.hour === '24') o.hour = '00';  // some engines emit 24 at midnight
+  return { year: +o.year, month: +o.month, day: +o.day,
+           hour: +o.hour, minute: +o.minute, second: +o.second };
+}
+
+// Minutes since midnight for an instant, in the display timezone.
+export function tzMinutes(ms) {
+  const p = tzParts(ms);
+  return p.hour * 60 + p.minute;
+}
+
+// {hour, minute} of an instant in the display timezone (chart tooltips).
+export function tzHourMin(ms) {
+  const p = tzParts(ms);
+  return { hour: p.hour, minute: p.minute };
+}
+
+// YYYY-MM-DD of an instant in the display timezone.
+function tzDateStr(p) {
+  return p.year + '-' + String(p.month).padStart(2, '0') + '-' + String(p.day).padStart(2, '0');
+}
+
+// Unix ms for a wall-clock time (date string + minutes-of-day) in the display
+// timezone. Iterative because the UTC offset depends on the date (DST).
+export function tzWallToMs(dateStr, minutes) {
+  const [y, mo, d] = dateStr.split('-').map(Number);
+  const wantUtc = Date.UTC(y, mo - 1, d, Math.floor(minutes / 60), minutes % 60, 0);
+  let guess = wantUtc;
+  for (let i = 0; i < 3; i++) {
+    const p = tzParts(guess);
+    const offset = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - guess;
+    const target = wantUtc - offset;
+    if (target === guess) break;
+    guess = target;
+  }
+  return guess;
+}
+
+// Unix ms of midnight in the display timezone for the day containing ms.
+export function tzDayStartMs(ms) {
+  return tzWallToMs(tzDateStr(tzParts(ms)), 0);
+}
+
+// Format a date in the display timezone with Intl options (chart labels).
+export function fmtDateTz(ms, opts) {
+  return new Date(ms).toLocaleString('en-US', { ...opts, timeZone: _tz() });
+}
+
 export function stripName(name) {
   if (!st.nameStrip || !st.nameStrip.length) return name;
   let result = name;
@@ -29,27 +96,25 @@ export function fmtWh(wh) {
 
 export function fmtTime(ts) {
   if (!ts) return '--';
-  const d = new Date(ts * 1000);
-  return d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  return new Date(ts * 1000).toLocaleTimeString([], {
+    hour: '2-digit', minute: '2-digit', timeZone: _tz(),
+  });
 }
 
 export function todayStr() {
-  const d = new Date();
-  return d.getFullYear() + '-' +
-    String(d.getMonth() + 1).padStart(2, '0') + '-' +
-    String(d.getDate()).padStart(2, '0');
+  const p = tzParts(Date.now());
+  return tzDateStr(p);
 }
 
 export function currentMinutes() {
-  const n = new Date();
-  return n.getHours() * 60 + n.getMinutes();
+  return tzMinutes(Date.now());
 }
 
 export function sliderToTimestamp(sliderVal) {
-  const minutes = parseInt(sliderVal);
-  const d = new Date();
-  d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
-  return d.getTime();
+  // Anchor to the selected date and the display timezone so the sun ball and
+  // production shading land on the correct day and time.
+  const dp = document.getElementById('date-picker');
+  return tzWallToMs((dp && dp.value) ? dp.value : todayStr(), parseInt(sliderVal));
 }
 
 export function estimateWh(series, targetMs) {

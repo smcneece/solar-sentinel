@@ -48,4 +48,5 @@ export const st = {
   playbackSpeed: 0.5,
   playbackTimer: null,
   weather: null,
+  haTz: null,        // HA server IANA timezone, from /api/about
 };

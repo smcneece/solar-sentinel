@@ -5,8 +5,14 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.06.9 - June 11, 2026
+
+- Fixed all times in the app (sun arc labels, time slider, production chart, grid chart, battery chart) rendering in the browser's local timezone instead of the HA server's timezone; for users whose browser and server are in different timezones, arc times were shifted and chart peaks landed at the wrong hour; Solar Sentinel now reads the HA server timezone at startup and uses it for all time math and display, since the array is at a fixed physical location and all times should reflect that location (thanks @sg1888)
+- Fixed today and tomorrow weather forecast icons appearing in the sun arc margins when viewing a past date; HA only exposes the current forecast and stores no weather history, so the icons now appear only when viewing today
+
 ## v2026.06.8 - June 9, 2026
 
+- Fixed sun arc appearing completely dark when viewing a past date; the arc was rendering the correct historical sun times but the sun position and daytime fill were being calculated against today's date rather than the selected date, placing the sun marker in the underground arc and producing an unlit arc; the slider timestamp calculation is now date-aware
 - Fixed sun arc showing today's sunrise, sunset, dawn, dusk, and solar noon when viewing a past date; times (and moon phase) are now computed for the selected date using the installation's latitude/longitude read from HA's config; today still uses the live sun.sun entity for accuracy; falls back to live values if HA does not expose coordinates (thanks @sg1888)
 - Fixed panel detail history chart showing misleadingly low power values in the 6-month and 1-year views; those ranges use daily statistics buckets, and the daily mean averages in all nighttime hours at 0W, dragging apparent peak output down to roughly a third of actual capacity; the 6m and 1y views now plot the daily maximum instead, matching the peaks visible in the 7d, 30d, and 90d views
 

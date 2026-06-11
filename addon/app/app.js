@@ -1,5 +1,5 @@
 import { st, FINE_W, FINE_H } from './state.js';
-import { fmtW, todayStr, currentMinutes, sliderToTimestamp, applyHistoryToPanels, recolorPanels } from './utils.js';
+import { fmtW, todayStr, currentMinutes, sliderToTimestamp, applyHistoryToPanels, recolorPanels, tzMinutes, tzWallToMs } from './utils.js';
 import { renderSunArc } from './arc.js';
 import { applyLeftPanelVisibility, fetchArrayChart, fetchGridChart, fetchBatteryChart, drawArrayChart, drawGridChart, drawBatterySocChart, drawBatteryKwhChart, initChartTooltip, initGridChartTooltip, initBatteryChartTooltip } from './charts.js';
 import { renderPanels, fitViewGrid, openPanelModal, switchPanelTab, loadPanelChart, savePanelRename } from './panels.js';
@@ -27,7 +27,7 @@ function sunArcMinutes() {
   if (!sun || !sun.dawn || !sun.dusk) return [0, 1440];
   const dayRange = sun.dusk - sun.dawn;
   const extMin = Math.round((dayRange * 0.16) / 60);
-  const toMin = ts => { const d = new Date(ts * 1000); return d.getHours() * 60 + d.getMinutes(); };
+  const toMin = ts => tzMinutes(ts * 1000);
   const arcMin = Math.max(0,    toMin(sun.dawn) - extMin);
   const arcMax = Math.min(1440, toMin(sun.dusk)  + extMin);
   if (arcMin >= arcMax) return [0, 1440];
@@ -78,7 +78,7 @@ async function fetchSun(dateStr) {
     slider.min = arcMin;
     slider.max = arcMax;
     const currentMs = st.sliderActive ? sliderToTimestamp(slider.value) : null;
-    renderSunArc(st.sunData, currentMs, st.weather);
+    renderSunArc(st.sunData, currentMs, weatherForView());
   } catch (e) {
     console.error('fetchSun:', e);
   }
@@ -94,11 +94,19 @@ async function fetchWeather() {
       const currentMs = st.sliderActive
         ? sliderToTimestamp(parseInt(document.getElementById('time-slider').value))
         : null;
-      renderSunArc(st.sunData, currentMs, st.weather);
+      renderSunArc(st.sunData, currentMs, weatherForView());
     }
   } catch (e) {
     console.error('fetchWeather:', e);
   }
+}
+
+// HA only exposes the current forecast (today/tomorrow) and stores no history,
+// so the forecast applies only when viewing today; hide it on past dates.
+function weatherForView() {
+  const dp = document.getElementById('date-picker');
+  const dateStr = (dp && dp.value) ? dp.value : todayStr();
+  return dateStr === todayStr() ? st.weather : null;
 }
 
 async function fetchHistory(dateStr) {
@@ -114,6 +122,16 @@ async function fetchHistory(dateStr) {
     console.error('fetchHistory:', e);
     return null;
   }
+}
+
+async function fetchDisplayTz() {
+  // Load the HA server timezone; all time display/math uses it.
+  try {
+    const resp = await fetch(`${window.BASE}/api/about`);
+    if (!resp.ok) return;
+    const d = await resp.json();
+    if (d.ha_tz) st.haTz = d.ha_tz;
+  } catch (e) { /* ignore */ }
 }
 
 async function fetchSettings() {
@@ -152,7 +170,7 @@ function scheduleRefresh() {
     await fetchPanels();
     if (!st.sliderActive) {
       updateSliderToNow();
-      if (st.sunData) renderSunArc(st.sunData, null, st.weather);
+      if (st.sunData) renderSunArc(st.sunData, null, weatherForView());
       if (st.chartRange === 'today') fetchArrayChart();
       if (st.showGridChart && st.gridChartRange === 'today') fetchGridChart();
       if (st.batteryAvailable) {
@@ -198,11 +216,10 @@ function playTick() {
   const h = Math.floor(val / 60), m = val % 60;
   document.getElementById('slider-label').textContent =
     `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-  if (st.sunData) renderSunArc(st.sunData, sliderToTimestamp(val), st.weather);
+  if (st.sunData) renderSunArc(st.sunData, sliderToTimestamp(val), weatherForView());
   const history = st.historyCache[dateStr];
   if (history) {
-    const [y, mo, d] = dateStr.split('-').map(Number);
-    const sliderTs = new Date(y, mo - 1, d, h, m).getTime();
+    const sliderTs = tzWallToMs(dateStr, val);
     let panels = applyHistoryToPanels(st.panels, history, sliderTs);
     panels = recolorPanels(panels);
     const online = panels.filter(p => p.status === 'online' && p.power_w > 0);
@@ -326,7 +343,7 @@ async function onSliderInput() {
       updateSliderToNow();
       renderPanels(st.panels);
       requestAnimationFrame(fitViewGrid);
-      if (st.sunData) renderSunArc(st.sunData, null, st.weather);
+      if (st.sunData) renderSunArc(st.sunData, null, weatherForView());
       return;
     }
   }
@@ -338,10 +355,9 @@ async function onSliderInput() {
   const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
   label.textContent = timeStr;
 
-  renderSunArc(st.sunData, sliderToTimestamp(val), st.weather);
+  renderSunArc(st.sunData, sliderToTimestamp(val), weatherForView());
 
-  const [y, mo, d] = dateStr.split('-').map(Number);
-  const sliderTs = new Date(y, mo - 1, d, h, m).getTime();
+  const sliderTs = tzWallToMs(dateStr, val);
 
   const history = await fetchHistory(dateStr);
   label.textContent = history && history.statistics_fallback ? timeStr + ' (hourly)' : timeStr;
@@ -539,13 +555,17 @@ function switchLeftPanelTab(tab) {
 // ── Init ──────────────────────────────────────────────────────────────────
 
 async function init() {
+  // Resolve the display timezone and user prefs first, so todayStr() /
+  // currentMinutes() below use the correct zone.
+  await fetchDisplayTz();
+  await fetchSettings();
+
   document.getElementById('date-picker').value = todayStr();
   document.getElementById('date-picker').max = todayStr();
   const _initSlider = document.getElementById('time-slider');
   _initSlider.max = 1440;
   _initSlider.value = currentMinutes();
 
-  await fetchSettings();
   await fetchGrid();
   await fetchPanels();
   await fetchSun();
@@ -737,7 +757,7 @@ async function init() {
     }
     clearTimeout(_resizeTimer);
     _resizeTimer = setTimeout(fitViewGrid, 100);
-    if (st.sunData) renderSunArc(st.sunData, st.sliderActive ? sliderToTimestamp(parseInt(document.getElementById('time-slider').value)) : null, st.weather);
+    if (st.sunData) renderSunArc(st.sunData, st.sliderActive ? sliderToTimestamp(parseInt(document.getElementById('time-slider').value)) : null, weatherForView());
     if (st.editMode) renderEditMode(st.panels);
   });
 
