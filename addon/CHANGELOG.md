@@ -5,7 +5,7 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
-## v2026.06.11 - June 27, 2026
+## v2026.06.10 - June 27, 2026
 
 - Added mobile view: when Solar Sentinel is opened on a phone or narrow screen (768px or less), a dedicated mobile layout loads automatically with no desktop elements visible; the mobile view is a full phone-native experience, not a scaled-down version of the desktop
 - Mobile panel grid shows the full positioned array with per-panel wattage and color coding using the same warm gradient as the desktop; panels are sized to fit the phone screen without scrolling
@@ -17,9 +17,6 @@ For full release notes and details on each version, see the [GitHub Releases pag
 - Grid Today chart now shows export Y-axis labels (purple, below the zero line) so exported kWh values are readable at a glance
 - Time slider now advances to the current minute on each live refresh tick, keeping the slider position and sun ball in sync with the clock without requiring user interaction
 - Rotating the phone re-renders the panel grid, sun arc, and active chart at the new dimensions immediately
-
-## v2026.06.10 - June 19, 2026
-
 - Reduced addon log noise: routine refresh cycles are now logged at debug level instead of info, so the log only records notable events such as the array coming online in the morning, production dropping to zero at end of day, panel count changes, and all panels going unavailable; previously every refresh cycle wrote a line, producing thousands of log entries per week with no actionable information
 - Fixed grid and battery sensors not updating when the HA Energy Dashboard configuration is changed while the addon is running; Solar Sentinel now re-reads the Energy Dashboard config once per hour so sensor changes are picked up automatically without requiring a restart; the Re-discover Inverters button in Settings still forces an immediate re-read at any time
 
