@@ -24,6 +24,10 @@ Should work with any solar integration already configured in the Energy Dashboar
 
 ![Main view](images/main-view.png)
 
+**Mobile View**
+
+![Mobile view](images/mobile-view.png)
+
 **Layout Editor**
 
 ![Layout editor](images/layout-editor.png)
