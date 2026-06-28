@@ -4,7 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Solar Sentinel</title>
-<link rel="stylesheet" href="{{BASE}}/app.css?v={{VERSION}}">
+<link rel="stylesheet" href="{{BASE}}/app.css?v={{VERSION}}&t={{TS}}">
+<link rel="stylesheet" href="{{BASE}}/mobile.css?v={{VERSION}}&t={{TS}}">
+<style>
+@media (max-width: 768px) {
+  .header, #panels-section, .color-legend, .arc-section { display: none !important; }
+}
+</style>
 </head>
 <body>
 
@@ -292,15 +298,22 @@
 <script type="importmap">
 {
   "imports": {
-    "./state.js":  "{{BASE}}/state.js?v={{VERSION}}",
-    "./utils.js":  "{{BASE}}/utils.js?v={{VERSION}}",
-    "./arc.js":    "{{BASE}}/arc.js?v={{VERSION}}",
-    "./charts.js": "{{BASE}}/charts.js?v={{VERSION}}",
-    "./panels.js": "{{BASE}}/panels.js?v={{VERSION}}",
-    "./layout.js": "{{BASE}}/layout.js?v={{VERSION}}"
+    "./state.js":           "{{BASE}}/state.js?v={{VERSION}}&t={{TS}}",
+    "./utils.js":           "{{BASE}}/utils.js?v={{VERSION}}&t={{TS}}",
+    "./arc.js":             "{{BASE}}/arc.js?v={{VERSION}}&t={{TS}}",
+    "./charts.js":          "{{BASE}}/charts.js?v={{VERSION}}&t={{TS}}",
+    "./panels.js":          "{{BASE}}/panels.js?v={{VERSION}}&t={{TS}}",
+    "./layout.js":          "{{BASE}}/layout.js?v={{VERSION}}&t={{TS}}",
+    "./mobile_timeline.js": "{{BASE}}/mobile_timeline.js?v={{VERSION}}&t={{TS}}"
   }
 }
 </script>
-<script type="module" src="{{BASE}}/app.js?v={{VERSION}}"></script>
+<script type="module">
+  if (window.innerWidth <= 768) {
+    import('{{BASE}}/mobile.js?v={{VERSION}}&t={{TS}}');
+  } else {
+    import('{{BASE}}/app.js?v={{VERSION}}&t={{TS}}');
+  }
+</script>
 </body>
 </html>

@@ -10,6 +10,22 @@ import { fetchGrid, enterEditMode, exitEditMode, renderEditMode } from './layout
 export function openModal(id)  { document.getElementById(id).classList.add('open'); }
 export function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+export function showToast(msg, durationMs = 500) {
+  const existing = document.getElementById('app-toast');
+  if (existing) existing.remove();
+  const t = document.createElement('div');
+  t.id = 'app-toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => {
+    t.classList.add('visible');
+    setTimeout(() => {
+      t.classList.remove('visible');
+      setTimeout(() => t.remove(), 250);
+    }, durationMs);
+  });
+}
+
 // ── Slider helpers ────────────────────────────────────────────────────────
 
 function updateSliderToNow() {
@@ -461,7 +477,8 @@ async function saveSettings() {
     applyLeftPanelVisibility();
     renderPanels(st.panels);
     requestAnimationFrame(fitViewGrid);
-    closeModal('settings-modal');
+    showToast('Settings saved');
+    setTimeout(() => closeModal('settings-modal'), 500);
   } catch (e) { console.error('saveSettings:', e); }
 }
 
@@ -765,4 +782,5 @@ async function init() {
   setInterval(updateCountdown, 1000);
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// Dynamic import() resolves after DOMContentLoaded fires, so DOM is already ready.
+init();

@@ -131,8 +131,8 @@ export async function fetchGridChart() {
   }
 }
 
-export function drawGridChart(points, hasExport) {
-  const canvas = document.getElementById('grid-chart');
+export function drawGridChart(points, hasExport, canvasEl = null, showYAxis = false, range = null) {
+  const canvas = canvasEl || document.getElementById('grid-chart');
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.offsetWidth, H = canvas.offsetHeight;
@@ -156,7 +156,7 @@ export function drawGridChart(points, hasExport) {
     return;
   }
 
-  const padT = 4, padR = 2, padB = 18, padL = 2;
+  const padT = 4, padR = 2, padB = 18, padL = showYAxis ? 30 : 2;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
   const n      = points.length;
@@ -178,7 +178,7 @@ export function drawGridChart(points, hasExport) {
 
   ctx.clearRect(0, 0, W, H);
 
-  if (st.gridChartRange === 'today' && points[0]?.ts_ms) {
+  if ((range || st.gridChartRange) === 'today' && points[0]?.ts_ms) {
     const dayStartMs = tzDayStartMs(points[0].ts_ms), dayMs = 86400 * 1000;
     const toX  = ts  => padL + ((ts - dayStartMs) / dayMs) * chartW;
     const toY  = kwh => zeroY - (kwh / maxPos) * posH;
@@ -262,6 +262,34 @@ export function drawGridChart(points, hasExport) {
       const label = h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h - 12}p`;
       ctx.fillText(label, x, padT + chartH + 3);
     });
+    if (showYAxis && maxPos > 0) {
+      [0.25, 0.5, 0.75, 1.0].forEach(f => {
+        const kwh = maxPos * f;
+        const y   = zeroY - f * posH;
+        ctx.strokeStyle = 'rgba(128,128,128,0.12)';
+        ctx.lineWidth = 0.5; ctx.setLineDash([2, 3]);
+        ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+        ctx.setLineDash([]);
+        const lbl = kwh >= 1 ? `${kwh.toFixed(1)}` : `${Math.round(kwh * 1000)}W`;
+        ctx.fillStyle = mutedColor; ctx.font = '11px system-ui';
+        ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+        ctx.fillText(lbl, padL - 3, y);
+      });
+    }
+    if (showYAxis && hasExport && maxNeg > 0.001) {
+      [0.25, 0.5, 0.75, 1.0].forEach(f => {
+        const kwh = maxNeg * f;
+        const y   = zeroY + f * negH;
+        ctx.strokeStyle = 'rgba(128,128,128,0.12)';
+        ctx.lineWidth = 0.5; ctx.setLineDash([2, 3]);
+        ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+        ctx.setLineDash([]);
+        const lbl = kwh >= 1 ? `${kwh.toFixed(1)}` : `${Math.round(kwh * 1000)}W`;
+        ctx.fillStyle = '#8b5cf6'; ctx.font = '11px system-ui';
+        ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+        ctx.fillText(lbl, padL - 3, y);
+      });
+    }
     return;
   }
 
@@ -415,8 +443,8 @@ export async function fetchArrayChart() {
   }
 }
 
-export function drawArrayChart(points, range) {
-  const canvas = document.getElementById('array-chart');
+export function drawArrayChart(points, range, canvasEl = null, showBarLabels = false, showYAxis = false) {
+  const canvas = canvasEl || document.getElementById('array-chart');
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.offsetWidth, H = canvas.offsetHeight;
@@ -441,7 +469,7 @@ export function drawArrayChart(points, range) {
     return;
   }
 
-  const padT = 4, padR = 2, padB = 18, padL = 2;
+  const padT = 4, padR = 2, padB = 18, padL = showYAxis ? 30 : 2;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
   const maxKwh = Math.max(...points.map(p => p.kwh), 0.001);
@@ -496,6 +524,20 @@ export function drawArrayChart(points, range) {
       const label = h === 0 ? '12a' : h < 12 ? `${h}a` : h === 12 ? '12p' : `${h - 12}p`;
       ctx.fillText(label, x, padT + chartH + 3);
     });
+    if (showYAxis && maxKwh > 0) {
+      [0.25, 0.5, 0.75, 1.0].forEach(f => {
+        const kwh = maxKwh * f;
+        const y   = padT + chartH - f * chartH;
+        ctx.strokeStyle = 'rgba(128,128,128,0.12)';
+        ctx.lineWidth = 0.5; ctx.setLineDash([2, 3]);
+        ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+        ctx.setLineDash([]);
+        const lbl = kwh >= 1 ? `${kwh.toFixed(1)}` : `${Math.round(kwh * 1000)}W`;
+        ctx.fillStyle = mutedColor; ctx.font = '11px system-ui';
+        ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+        ctx.fillText(lbl, padL - 3, y);
+      });
+    }
     return;
   }
 
@@ -514,6 +556,19 @@ export function drawArrayChart(points, range) {
     ctx.beginPath();
     ctx.roundRect(x, y, barW, bh, [barR, barR, 0, 0]);
     ctx.fill();
+    if (showBarLabels && bh >= 24 && barW >= 14) {
+      const val = pt.kwh >= 10 ? Math.round(pt.kwh) : pt.kwh.toFixed(1);
+      const fs  = Math.max(7, Math.min(13, Math.floor(barW * 0.5)));
+      const cx  = x + barW / 2, cy = y + bh / 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.72)';
+      ctx.textAlign = 'center';
+      ctx.font = `700 ${fs}px system-ui`;
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(String(val), cx, cy + 1);
+      ctx.font = `500 ${Math.max(6, fs - 2)}px system-ui`;
+      ctx.textBaseline = 'top';
+      ctx.fillText('kWh', cx, cy + 1);
+    }
   });
 
   ctx.strokeStyle = borderColor;
@@ -593,8 +648,8 @@ export async function fetchBatteryChart() {
   }
 }
 
-export function drawBatterySocChart(points) {
-  const canvas = document.getElementById('battery-chart');
+export function drawBatterySocChart(points, canvasEl = null, showYAxis = false) {
+  const canvas = canvasEl || document.getElementById('battery-chart');
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.offsetWidth, H = canvas.offsetHeight;
@@ -617,7 +672,7 @@ export function drawBatterySocChart(points) {
     return;
   }
 
-  const padT = 4, padR = 2, padB = 18, padL = 2;
+  const padT = 4, padR = 2, padB = 18, padL = showYAxis ? 30 : 2;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
 
@@ -636,6 +691,11 @@ export function drawBatterySocChart(points) {
   [25, 50, 75].forEach(pct => {
     const y = toY(pct);
     ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    if (showYAxis) {
+      ctx.fillStyle = mutedColor; ctx.font = '11px system-ui';
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(`${pct}%`, padL - 3, y);
+    }
   });
 
   // Area fill
@@ -676,8 +736,8 @@ export function drawBatterySocChart(points) {
   });
 }
 
-export function drawBatteryKwhChart(points) {
-  const canvas = document.getElementById('battery-chart');
+export function drawBatteryKwhChart(points, canvasEl = null) {
+  const canvas = canvasEl || document.getElementById('battery-chart');
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.offsetWidth, H = canvas.offsetHeight;

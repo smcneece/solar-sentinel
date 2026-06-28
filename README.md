@@ -9,7 +9,7 @@ Should work with any solar integration already configured in the Energy Dashboar
 
 > ⚠️ **Installation type**: Solar Sentinel is primarily a Home Assistant **App** (used to be called Add-on's) requiring a Supervisor-managed installation (HA OS or HA Supervised). **Docker support is implemented but untested.** If you run Home Assistant Container and want to give it a try, see [Docker Installation](#docker-installation-untested----looking-for-testers) below and report back. Home Assistant Core (Python package only) is not supported.
 
-> 📱 **Mobile/tablet**: Solar Sentinel is designed for desktop browsers and looks best on a 1080p or larger monitor. It may be usable on a tablet in landscape mode or a phone in landscape for quick viewing, but it is not optimized for small screens. Please do not open an issue about mobile layout; it is a known limitation, not a bug.
+> 📱 **Mobile view included**: Solar Sentinel detects phones and narrow screens automatically and switches to a dedicated mobile layout. The mobile view includes the full panel grid, sun arc with time slider, chart tabs (Grid, Production, Battery), day navigation, and settings, all optimized for touch. No configuration required.
 
 > [![Sponsor](https://img.shields.io/badge/Sponsor-💖-pink)](https://github.com/sponsors/smcneece) If Solar Sentinel helps you spot a shaded panel, a failing micro-inverter, or just gives you something satisfying to look at on a sunny day, consider sponsoring! Even a small one-time amount shows appreciation. Check out my [other HA projects](https://github.com/smcneece?tab=repositories) while you're here.
 >
@@ -99,6 +99,17 @@ Should work with any solar integration already configured in the Energy Dashboar
 - When detailed recorder data is available, history is shown at full per-state resolution
 - When recorder data has been purged (older than `purge_keep_days`), Solar Sentinel automatically falls back to HA's long-term statistics, which provide hourly average power readings; the time label shows "(hourly)" when this is active
 - HA's default recorder retention is 10 days; see [History retention](#history-retention) below to extend it
+
+### Mobile View
+- Automatically activates on phones and narrow screens (768px or less); no setup or separate URL required
+- Full panel grid with color coding, summary bar, and color legend, sized to fit the phone screen
+- Sun arc and time slider with the same behavior as the desktop: slider range spans the visible arc window (dawn to dusk extension), tick labels show actual Dawn, Solar Noon, and Dusk times, and the sun ball tracks the slider position
+- Timeline controls: jump to start of day, play/pause playback, previous/next day arrows, tappable date label for the native date picker, and a Live button; day navigation preserves the slider's time-of-day position on the new date
+- Chart tabs for Grid, Production, and Battery with Today/Week/Month/Year range buttons; the Today button label changes to the short date (e.g. "Jun 25") when viewing a historical day, and the chart data follows the timeline date
+- Tap any chart to see a color-coded value toast for that time slot; tap anywhere to dismiss
+- Slider advances to the current minute on each live refresh tick
+- Rotates cleanly: panel grid, sun arc, and active chart redraw automatically when the phone is rotated
+- Settings tab with the same per-user options as the desktop (refresh interval, panel wattage, min average W, battery invert); layout editor options are desktop-only
 
 ### Configuration and Display
 - Help / About modal: shows app version, HA version, install mode, inverters found, and HA timezone; quick links to documentation, changelog, and issue tracker; Download Debug Info button downloads a JSON snapshot of your Energy Dashboard config and entity states (solar-sentinel-debug.json) for issue reporting
@@ -265,7 +276,7 @@ If your panel count looks wrong, click the Re-discover button in Settings to for
 
 ## Browser Support
 
-Solar Sentinel works in all modern desktop and mobile browsers. The panel grid is designed for desktop-width screens; on narrow mobile screens the grid wraps to fewer columns and panel cards scale down. The sun arc and time slider are fully functional on mobile.
+Solar Sentinel works in all modern desktop and mobile browsers. On phones and narrow screens (768px or less), a dedicated mobile layout loads automatically. On desktop, the full layout editor and all desktop-only features (panel drag-and-drop, section labels, layout export/import) are available.
 
 ---
 

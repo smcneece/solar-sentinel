@@ -57,8 +57,8 @@ function moonSvg(phase, cx, cy, rx, ry) {
   return clip + base + edge;
 }
 
-export function renderSunArc(sun, currentMs, weather) {
-  const svg = document.getElementById('sun-arc');
+export function renderSunArc(sun, currentMs, weather, svgEl = null) {
+  const svg = svgEl || document.getElementById('sun-arc');
   if (!sun || !sun.dawn || !sun.dusk) return;
 
   const W = 800, H = 220;
@@ -119,10 +119,13 @@ export function renderSunArc(sun, currentMs, weather) {
   const twi1 = (sr && sr > dawn_ts) ? pathFill(dawn_ts, sr, 20) : '';
   const twi2 = (ss && dusk_ts > ss) ? pathFill(ss, dusk_ts, 20) : '';
 
-  // Compensation factor for SVG x-stretch: getBoundingClientRect gives actual rendered
-  // pixel width; clientWidth returns the viewBox width (800) which is wrong here.
-  const svgRenderedW = svg.getBoundingClientRect().width || W;
-  const svgCompX = (200 / H) * (W / svgRenderedW);
+  // Compensate for SVG scaling: on desktop height:100% the container forces a non-square
+  // element, so X and Y scale differently. Use actual rendered dimensions so both mobile
+  // (height:auto, maintains viewBox ratio -> compX=1.0) and desktop work correctly.
+  const _rect = svg.getBoundingClientRect();
+  const svgRenderedW = _rect.width  || W;
+  const svgRenderedH = _rect.height || H;
+  const svgCompX = (svgRenderedH / H) * (W / svgRenderedW);
 
   const isDay = sr && ss && nowTs >= sr && nowTs <= ss;
   const aboveGround = nowTs >= dawn_ts && nowTs <= dusk_ts;

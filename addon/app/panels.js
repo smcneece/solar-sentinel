@@ -445,3 +445,150 @@ export function fitViewGrid() {
 // pattern to avoid a circular import (app.js imports panels.js).
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── Mobile panel grid ─────────────────────────────────────────────────────
+
+function _makeMobilePanelCard(p, panelW) {
+  const cell = document.createElement('div');
+  const isGradient = p.color && p.color !== 'gray';
+  cell.className = 'm-panel-card ' + (isGradient ? 'gradient' : 'gray');
+  cell.dataset.entityId = p.entity_id;
+  if (isGradient) cell.style.backgroundColor = p.color;
+
+  if (p.status === 'online') {
+    const w = p.power_w || 0;
+    const isKw = w >= 1000;
+    const numStr  = isKw ? (w / 1000).toFixed(1) : Math.round(w).toString();
+    const unitStr = isKw ? 'kW' : 'W';
+
+    const num = document.createElement('div');
+    num.className = 'm-p-num';
+    num.textContent = numStr;
+    num.style.fontSize = Math.max(6, Math.round(panelW * 0.28)) + 'px';
+
+    const unit = document.createElement('div');
+    unit.className = 'm-p-unit';
+    unit.textContent = unitStr;
+    unit.style.fontSize = Math.max(5, Math.round(panelW * 0.20)) + 'px';
+
+    cell.appendChild(num);
+    cell.appendChild(unit);
+  } else {
+    const dash = document.createElement('div');
+    dash.className = 'm-p-num';
+    dash.textContent = '--';
+    dash.style.fontSize = Math.max(6, Math.round(panelW * 0.28)) + 'px';
+    cell.appendChild(dash);
+  }
+
+  cell.addEventListener('click', () => openPanelModal(p));
+  return cell;
+}
+
+function _renderMobileFlowGrid(panels, container) {
+  const cols = Math.max(2, Math.ceil(Math.sqrt(panels.length * 0.75)));
+  const gap = 2;
+  const avail = container.clientWidth || window.innerWidth;
+  const panelW = Math.floor((avail - gap * (cols - 1)) / cols);
+  const panelH = Math.round(panelW * FINE_W / FINE_H);
+  const grid = document.createElement('div');
+  grid.style.cssText = [
+    'display:grid',
+    `grid-template-columns:repeat(${cols},${panelW}px)`,
+    `gap:${gap}px`,
+    'background:var(--bg)',
+  ].join(';') + ';';
+  for (const p of panels) {
+    const card = _makeMobilePanelCard(p, panelW);
+    card.style.height = panelH + 'px';
+    grid.appendChild(card);
+  }
+  container.appendChild(grid);
+}
+
+function _renderMobilePositionedGrid(panels, container) {
+  const { positions, labels } = st.gridLayout;
+  const rotations = st.gridLayout.rotations || {};
+  const byId = {};
+  for (const p of panels) byId[p.entity_id] = p;
+
+  // Compute the actual occupied fine-column/row range so empty leading columns
+  // are stripped (removes left margin and brings distant groups on-screen).
+  let minFc = Infinity, maxFc = -Infinity, minFr = Infinity, maxFr = -Infinity;
+  for (const [eid, [fr, fc]] of Object.entries(positions)) {
+    const [spanCols, spanRows] = getSpan(eid, rotations);
+    if (fc < minFc) minFc = fc;
+    if (fc + spanCols > maxFc) maxFc = fc + spanCols;
+    if (fr < minFr) minFr = fr;
+    if (fr + spanRows > maxFr) maxFr = fr + spanRows;
+  }
+  for (const lbl of (labels || [])) {
+    const fc = lbl.col, fr = lbl.row;
+    const sc = lbl.spanCols || 1, sr = lbl.spanRows || 1;
+    if (fc < minFc) minFc = fc;
+    if (fc + sc > maxFc) maxFc = fc + sc;
+    if (fr < minFr) minFr = fr;
+    if (fr + sr > maxFr) maxFr = fr + sr;
+  }
+  if (!isFinite(minFc)) { minFc = 0; maxFc = 1; minFr = 0; maxFr = 1; }
+
+  const usedCols = maxFc - minFc;
+  const usedRows = maxFr - minFr;
+
+  const gap = 2;
+  const avail = container.clientWidth || window.innerWidth;
+  const isPortrait = avail <= 500;
+  const fitPx = Math.max(6, Math.floor((avail - gap * (usedCols - 1)) / usedCols));
+  // Portrait: target ~46px per rendered panel (FINE_W fine-cols + inner gaps).
+  // Landscape: fit exactly with 0.88 shrink so more fits on wider screen.
+  const minCellPx = Math.max(6, Math.floor((46 - (FINE_W - 1) * gap) / FINE_W));
+  const cellPx = isPortrait
+    ? Math.max(fitPx, minCellPx)
+    : Math.floor(fitPx * 0.88);
+
+  const grid = document.createElement('div');
+  grid.id = 'm-panel-view-grid';
+  grid.style.cssText = [
+    'display:grid',
+    `grid-template-columns:repeat(${usedCols},${cellPx}px)`,
+    `grid-template-rows:repeat(${usedRows},${cellPx}px)`,
+    `gap:${gap}px`,
+    'background:var(--bg)',
+    'flex-shrink:0',
+  ].join(';') + ';';
+
+  for (const [eid, [fr, fc]] of Object.entries(positions)) {
+    const p = byId[eid];
+    if (!p) continue;
+    const [spanCols, spanRows] = getSpan(eid, rotations);
+    const panelW = spanCols * cellPx + (spanCols - 1) * gap;
+    const card = _makeMobilePanelCard(p, panelW);
+    card.style.gridColumn = `${fc - minFc + 1} / span ${spanCols}`;
+    card.style.gridRow    = `${fr - minFr + 1} / span ${spanRows}`;
+    grid.appendChild(card);
+  }
+
+  for (const lbl of (labels || [])) {
+    const el = document.createElement('div');
+    el.className = 'm-label-view';
+    el.style.gridColumn = `${lbl.col - minFc + 1} / span ${lbl.spanCols || 1}`;
+    el.style.gridRow    = `${lbl.row - minFr + 1} / span ${lbl.spanRows || 1}`;
+    el.textContent = lbl.text;
+    grid.appendChild(el);
+  }
+
+  container.appendChild(grid);
+}
+
+export function renderPanelGridMobile(panels) {
+  const container = document.getElementById('m-panel-grid');
+  if (!container) return;
+  container.innerHTML = '';
+  if (!panels || !panels.length) return;
+
+  if (!st.gridLayout || !Object.keys(st.gridLayout.positions || {}).length) {
+    _renderMobileFlowGrid(panels, container);
+    return;
+  }
+  _renderMobilePositionedGrid(panels, container);
+}

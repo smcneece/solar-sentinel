@@ -949,3 +949,29 @@
     0%, 100% { box-shadow: 0 0 0 0 rgba(67, 160, 71, 0.45); }
     50%       { box-shadow: 0 0 0 5px rgba(67, 160, 71, 0); }
   }
+
+/* ── Desktop toast ──────────────────────────────────────────────────────── */
+
+#app-toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 8px 22px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 9999;
+}
+
+#app-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

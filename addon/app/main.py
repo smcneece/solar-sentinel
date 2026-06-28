@@ -9,6 +9,7 @@ import datetime
 import json
 import logging
 import os
+import time
 import zoneinfo
 
 from aiohttp import web
@@ -22,7 +23,7 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "2026.06.9"
+VERSION = "2026.06.10"
 
 _inverters: list = []        # discovered inverter descriptors
 _panels_cache: list = []     # latest computed panel states
@@ -32,6 +33,11 @@ _grid_entities: dict = {}    # {"import_id", "import_unit", "export_id", "export
 _batteries: list = []        # discovered battery descriptors
 _battery_discovered: bool = False
 _fast_retry_count: int = 0   # consecutive all-unavailable refreshes; drives post-restart fast retry
+_prev_panel_count: int = 0   # panel count last cycle; INFO log when it changes
+_prev_producing: bool = False # was array producing last cycle; INFO log on wake/sleep transitions
+_grid_discovery_ts: float = 0.0    # monotonic time of last grid entity discovery
+_battery_discovery_ts: float = 0.0 # monotonic time of last battery discovery
+_REDISCOVER_INTERVAL = 3600        # re-read Energy Dashboard config once per hour
 
 
 # ── Color coding ─────────────────────────────────────────────────────────
@@ -65,7 +71,7 @@ def _compute_color(power_w: float, avg_w: float, status: str, peak_w: float = 0.
 
 async def do_refresh() -> bool:
     """Returns True if all discovered panels are unavailable (signals fast retry to caller)."""
-    global _panels_cache, _ha_tz, _ha_location, _inverters, _grid_entities, _batteries, _battery_discovered
+    global _panels_cache, _ha_tz, _ha_location, _inverters, _grid_entities, _batteries, _battery_discovered, _prev_panel_count, _prev_producing, _grid_discovery_ts, _battery_discovery_ts
 
     if not _ha_tz:
         _ha_tz = await ha_api.get_ha_timezone()
@@ -88,14 +94,18 @@ async def do_refresh() -> bool:
             _panels_cache = []
             return
 
-    if not _grid_entities:
+    if (not _grid_entities or not _grid_entities.get("import_id")
+            or (time.monotonic() - _grid_discovery_ts) > _REDISCOVER_INTERVAL):
         _LOGGER.info("Running grid entity discovery...")
         _grid_entities = await ha_api.discover_grid_entities()
+        _grid_discovery_ts = time.monotonic()
 
-    if not _battery_discovered:
+    if (not _battery_discovered
+            or (time.monotonic() - _battery_discovery_ts) > _REDISCOVER_INTERVAL):
         _LOGGER.info("Running battery discovery...")
         _batteries = await ha_api.discover_battery_sources()
         _battery_discovered = True
+        _battery_discovery_ts = time.monotonic()
 
     power_ids = [inv["entity_id"] for inv in _inverters]
     states = await ha_api.get_entity_states_batch(power_ids)
@@ -153,11 +163,24 @@ async def do_refresh() -> bool:
 
     _panels_cache = panels
     all_unavailable = bool(panels) and all(p["status"] == "unavailable" for p in panels)
-    _LOGGER.info(
-        "Refreshed: %d panel(s), %.0f W total, %.0f W avg%s",
-        len(panels), total_w, avg_w,
-        " [all unavailable]" if all_unavailable else "",
-    )
+
+    now_producing = total_w > 0
+    panel_count_changed = len(panels) != _prev_panel_count
+    production_changed = now_producing != _prev_producing
+
+    if all_unavailable:
+        _LOGGER.info("Refreshed: %d panel(s) [all unavailable]", len(panels))
+    elif panel_count_changed:
+        _LOGGER.info("Refreshed: %d panel(s), %.0f W total, %.0f W avg", len(panels), total_w, avg_w)
+    elif production_changed and now_producing:
+        _LOGGER.info("Array online: %.0f W total, %.0f W avg across %d panel(s)", total_w, avg_w, len(panels))
+    elif production_changed and not now_producing:
+        _LOGGER.info("Array offline: production dropped to 0 W")
+    else:
+        _LOGGER.debug("Refreshed: %d panel(s), %.0f W total, %.0f W avg", len(panels), total_w, avg_w)
+
+    _prev_panel_count = len(panels)
+    _prev_producing = now_producing
     return all_unavailable
 
 
@@ -189,43 +212,35 @@ async def refresh_loop():
 
 async def handle_index(request):
     base = request.headers.get("X-Ingress-Path", "").rstrip("/")
-    return web.Response(text=_build_html(base), content_type="text/html")
+    return web.Response(
+        text=_build_html(base),
+        content_type="text/html",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 async def handle_icon(request):
     return web.FileResponse("/app/icon.png")
 
 
-async def handle_app_css(request):
-    return web.FileResponse("/app/app.css")
+def _js(path):
+    return web.Response(text=open(path).read(), content_type="application/javascript",
+                        headers={"Cache-Control": "no-store"})
 
+def _css(path):
+    return web.Response(text=open(path).read(), content_type="text/css",
+                        headers={"Cache-Control": "no-store"})
 
-async def handle_app_js(request):
-    return web.FileResponse("/app/app.js")
-
-
-async def handle_state_js(request):
-    return web.FileResponse("/app/state.js")
-
-
-async def handle_utils_js(request):
-    return web.FileResponse("/app/utils.js")
-
-
-async def handle_arc_js(request):
-    return web.FileResponse("/app/arc.js")
-
-
-async def handle_charts_js(request):
-    return web.FileResponse("/app/charts.js")
-
-
-async def handle_panels_js(request):
-    return web.FileResponse("/app/panels.js")
-
-
-async def handle_layout_js(request):
-    return web.FileResponse("/app/layout.js")
+async def handle_app_css(request):    return _css("/app/app.css")
+async def handle_app_js(request):     return _js("/app/app.js")
+async def handle_state_js(request):   return _js("/app/state.js")
+async def handle_utils_js(request):   return _js("/app/utils.js")
+async def handle_arc_js(request):     return _js("/app/arc.js")
+async def handle_charts_js(request):  return _js("/app/charts.js")
+async def handle_panels_js(request):  return _js("/app/panels.js")
+async def handle_layout_js(request):  return _js("/app/layout.js")
+async def handle_mobile_js(request):  return _js("/app/mobile.js")
+async def handle_mobile_css(request): return _css("/app/mobile.css")
 
 
 async def handle_api_panels(request):
@@ -1067,9 +1082,14 @@ async def handle_api_debug(request):
 # ── HTML template injection ───────────────────────────────────────────────
 
 def _build_html(base: str) -> str:
+    import time
     with open("/app/index.html", "r") as f:
         template = f.read()
-    return template.replace("{{BASE}}", base).replace("{{VERSION}}", VERSION)
+    ts = str(int(time.time()))
+    return (template
+            .replace("{{BASE}}", base)
+            .replace("{{VERSION}}", VERSION)
+            .replace("{{TS}}", ts))
 
 
 # ── Startup and app wiring ────────────────────────────────────────────────
@@ -1092,6 +1112,8 @@ def main():
     app.router.add_get("/charts.js",              handle_charts_js)
     app.router.add_get("/panels.js",              handle_panels_js)
     app.router.add_get("/layout.js",              handle_layout_js)
+    app.router.add_get("/mobile.js",              handle_mobile_js)
+    app.router.add_get("/mobile.css",             handle_mobile_css)
     app.router.add_get("/api/panels",             handle_api_panels)
     app.router.add_get("/api/sun",                handle_api_sun)
     app.router.add_get("/api/history",            handle_api_history)
