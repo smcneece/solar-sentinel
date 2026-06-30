@@ -20,9 +20,9 @@ Should work with any solar integration already configured in the Energy Dashboar
 
 ## Screenshots
 
-**Main View**
+**Desktop View**
 
-![Main view](images/main-view.png)
+![Desktop view](images/main-view.png)
 
 **Mobile View**
 
@@ -113,7 +113,8 @@ Should work with any solar integration already configured in the Energy Dashboar
 - Tap any chart to see a color-coded value toast for that time slot; tap anywhere to dismiss
 - Slider advances to the current minute on each live refresh tick
 - Rotates cleanly: panel grid, sun arc, and active chart redraw automatically when the phone is rotated
-- Settings tab with the same per-user options as the desktop (refresh interval, panel wattage, min average W, battery invert); layout editor options are desktop-only
+- Settings tab with the same per-user options as the desktop (refresh interval, panel wattage, min average W, battery invert)
+- Panel layout editor (drag-and-drop placement, rotation, section labels, export/import) is desktop-only; the mobile view uses whatever layout was set up on the desktop
 
 ### Configuration and Display
 - Help / About modal: shows app version, HA version, install mode, inverters found, and HA timezone; quick links to documentation, changelog, and issue tracker; Download Debug Info button downloads a JSON snapshot of your Energy Dashboard config and entity states (solar-sentinel-debug.json) for issue reporting

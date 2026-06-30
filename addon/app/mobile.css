@@ -317,6 +317,30 @@ body.mobile-view {
   flex-shrink: 0;
 }
 
+#m-bat-selector {
+  flex-direction: row;
+  gap: 6px;
+  padding: 4px 12px 6px;
+  flex-shrink: 0;
+}
+
+.m-bat-sel-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.m-bat-sel-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(245,166,35,0.10);
+}
+
 /* Portrait: cap chart height so it doesn't fill the whole screen */
 @media (max-width: 500px) {
   .m-chart-wrap {

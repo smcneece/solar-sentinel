@@ -5,6 +5,11 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.06.11 - June 28, 2026
+
+- Added multiple battery support on mobile: if more than one battery system is configured in the HA Energy Dashboard, selector buttons appear at the top of the mobile battery tab to switch between them, matching the desktop behavior
+- Fixed mobile battery tab showing "-- %" instead of the current state of charge; the backend was not including the SoC value in the chart response, so the header always showed the fallback placeholder; SoC is now derived from the last recorded data point
+
 ## v2026.06.10 - June 27, 2026
 
 - Added mobile view: when Solar Sentinel is opened on a phone or narrow screen (768px or less), a dedicated mobile layout loads automatically with no desktop elements visible; the mobile view is a full phone-native experience, not a scaled-down version of the desktop

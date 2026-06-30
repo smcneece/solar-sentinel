@@ -88,6 +88,7 @@ function buildMobileShell() {
           <span class="m-chart-title">Battery</span>
           <span class="m-chart-kwh" id="m-battery-soc">-- %</span>
         </div>
+        <div id="m-bat-selector" style="display:none"></div>
         <div class="m-range-btns" id="m-battery-range-btns">
           <button class="m-range-btn active" data-range="today">Today</button>
           <button class="m-range-btn" data-range="week">Week</button>
@@ -175,7 +176,7 @@ function switchTab(name) {
   if (name === 'settings')    loadSettingsTab();
   if (name === 'grid')        fetchMobileGridChart();
   if (name === 'production')  fetchMobileProductionChart();
-  if (name === 'battery')     fetchMobileBatteryChart();
+  if (name === 'battery')     { fetchMobileBatteryStatus(); fetchMobileBatteryChart(); }
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────
@@ -298,6 +299,9 @@ let _mGridData = null;
 let _mProdData = null;
 let _mBatData  = null;
 
+let _mBatIdx  = 0;
+let _mBatList = [];
+
 let _mDate           = todayStr();
 let _mHistoryData    = null;
 let _mPlayTimer      = null;
@@ -414,6 +418,35 @@ async function fetchMobileProductionChart(range) {
   } catch (e) { console.error('fetchMobileProductionChart:', e); }
 }
 
+async function fetchMobileBatteryStatus() {
+  if (!st.batteryAvailable) return;
+  try {
+    const resp = await fetch(`${window.BASE}/api/battery_status`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    _mBatList = data.batteries || [];
+    if (_mBatIdx >= _mBatList.length) _mBatIdx = 0;
+    _renderMobileBatSelector();
+  } catch (e) { console.error('fetchMobileBatteryStatus:', e); }
+}
+
+function _renderMobileBatSelector() {
+  const el = document.getElementById('m-bat-selector');
+  if (!el) return;
+  if (_mBatList.length < 2) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = _mBatList.map((b, i) =>
+    `<button class="m-bat-sel-btn${i === _mBatIdx ? ' active' : ''}" data-idx="${i}">${b.name || 'Battery ' + (i + 1)}</button>`
+  ).join('');
+  el.querySelectorAll('.m-bat-sel-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _mBatIdx = parseInt(btn.dataset.idx);
+      _renderMobileBatSelector();
+      fetchMobileBatteryChart();
+    });
+  });
+}
+
 async function fetchMobileBatteryChart(range) {
   if (range) _mBatRange = range;
   const canvas = document.getElementById('m-battery-canvas');
@@ -421,14 +454,17 @@ async function fetchMobileBatteryChart(range) {
   _drawLoading('m-battery-canvas');
   try {
     const dateParam = (_mBatRange === 'today' && _mDate !== todayStr()) ? `&date=${_mDate}` : '';
-    const resp = await fetch(`${window.BASE}/api/battery_chart?range=${_mBatRange}${dateParam}`);
+    const resp = await fetch(`${window.BASE}/api/battery_chart?range=${_mBatRange}&idx=${_mBatIdx}${dateParam}`);
     if (!resp.ok) return;
     const data = await resp.json();
     const totalEl = document.getElementById('m-battery-soc');
-    if (totalEl) totalEl.textContent = data.current_soc != null
-      ? `${Math.round(data.current_soc)} %` : '-- %';
     const pts = data.points || [];
     _mBatData = { points: pts, type: data.type || 'soc' };
+    // Backend doesn't return current_soc; derive from last data point
+    const lastSoc = (data.type === 'soc' || !data.type) && pts.length
+      ? pts[pts.length - 1].soc_pct : null;
+    if (totalEl) totalEl.textContent = lastSoc != null
+      ? `${Math.round(lastSoc)} %` : '-- %';
     if (data.type === 'soc') {
       drawBatterySocChart(pts, canvas, true);
     } else {
