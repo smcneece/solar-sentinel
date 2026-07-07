@@ -468,7 +468,7 @@ async function fetchMobileBatteryChart(range) {
     if (data.type === 'soc') {
       drawBatterySocChart(pts, canvas, true);
     } else {
-      drawBatteryKwhChart(pts, canvas);
+      drawBatteryKwhChart(pts, canvas, true);
     }
   } catch (e) { console.error('fetchMobileBatteryChart:', e); }
 }

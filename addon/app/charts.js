@@ -123,7 +123,7 @@ export async function fetchGridChart() {
         totalEl.textContent = `${(data.import_total || 0).toFixed(1)} kWh`;
       }
     }
-    drawGridChart(st.lastGridPoints, st.gridHasExport);
+    drawGridChart(st.lastGridPoints, st.gridHasExport, null, true);
   } catch (e) {
     clearTimeout(loadingTimer);
     console.error('fetchGridChart:', e);
@@ -180,8 +180,9 @@ export function drawGridChart(points, hasExport, canvasEl = null, showYAxis = fa
 
   if ((range || st.gridChartRange) === 'today' && points[0]?.ts_ms) {
     const dayStartMs = tzDayStartMs(points[0].ts_ms), dayMs = 86400 * 1000;
+    const sharedMax  = Math.max(maxPos, maxNeg);
     const toX  = ts  => padL + ((ts - dayStartMs) / dayMs) * chartW;
-    const toY  = kwh => zeroY - (kwh / maxPos) * posH;
+    const toY  = kwh => zeroY - (kwh / sharedMax) * posH;
 
     // Trim trailing zero points so curves end at last data point
     const lastNonZero = points.reduce((acc, p, i) =>
@@ -218,7 +219,7 @@ export function drawGridChart(points, hasExport, canvasEl = null, showYAxis = fa
       ctx.strokeStyle = '#5b8ee6'; ctx.lineWidth = 1.5; ctx.stroke();
 
       // Export below zero
-      const toYExp = kwh => zeroY + (kwh / maxNeg) * negH;
+      const toYExp = kwh => zeroY + (kwh / sharedMax) * negH;
       const gradPurple = ctx.createLinearGradient(0, zeroY, 0, padT + chartH);
       gradPurple.addColorStop(0, 'rgba(139, 92, 246, 0.45)');
       gradPurple.addColorStop(1, 'rgba(139, 92, 246, 0.05)');
@@ -264,7 +265,7 @@ export function drawGridChart(points, hasExport, canvasEl = null, showYAxis = fa
     });
     if (showYAxis && maxPos > 0) {
       [0.25, 0.5, 0.75, 1.0].forEach(f => {
-        const kwh = maxPos * f;
+        const kwh = sharedMax * f;
         const y   = zeroY - f * posH;
         ctx.strokeStyle = 'rgba(128,128,128,0.12)';
         ctx.lineWidth = 0.5; ctx.setLineDash([2, 3]);
@@ -278,7 +279,7 @@ export function drawGridChart(points, hasExport, canvasEl = null, showYAxis = fa
     }
     if (showYAxis && hasExport && maxNeg > 0.001) {
       [0.25, 0.5, 0.75, 1.0].forEach(f => {
-        const kwh = maxNeg * f;
+        const kwh = sharedMax * f;
         const y   = zeroY + f * negH;
         ctx.strokeStyle = 'rgba(128,128,128,0.12)';
         ctx.lineWidth = 0.5; ctx.setLineDash([2, 3]);
@@ -355,7 +356,7 @@ export function initGridChartTooltip() {
   const tooltip   = document.getElementById('grid-chart-tooltip');
   if (!canvas || !tooltip) return;
 
-  const padL = 2, padR = 2, padB = 18, padT = 4;
+  const padL = 30, padR = 2, padB = 18, padT = 4;
 
   canvas.addEventListener('mousemove', (e) => {
     const points = st.lastGridPoints;
@@ -435,7 +436,7 @@ export async function fetchArrayChart() {
     st.lastChartPoints = data.points || [];
     const totalEl = document.getElementById('chart-total-kwh');
     if (totalEl) totalEl.textContent = data.total_kwh != null ? `${data.total_kwh.toFixed(1)} kWh` : '-- kWh';
-    drawArrayChart(st.lastChartPoints, data.range);
+    drawArrayChart(st.lastChartPoints, data.range, null, false, true, true);
   } catch (e) {
     clearTimeout(loadingTimer);
     console.error('fetchArrayChart:', e);
@@ -443,7 +444,7 @@ export async function fetchArrayChart() {
   }
 }
 
-export function drawArrayChart(points, range, canvasEl = null, showBarLabels = false, showYAxis = false) {
+export function drawArrayChart(points, range, canvasEl = null, showBarLabels = false, showYAxis = false, labelsRight = false) {
   const canvas = canvasEl || document.getElementById('array-chart');
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
@@ -469,7 +470,7 @@ export function drawArrayChart(points, range, canvasEl = null, showBarLabels = f
     return;
   }
 
-  const padT = 4, padR = 2, padB = 18, padL = showYAxis ? 30 : 2;
+  const padT = 4, padR = (showYAxis && labelsRight) ? 30 : 2, padB = 18, padL = (showYAxis && !labelsRight) ? 30 : 2;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
   const maxKwh = Math.max(...points.map(p => p.kwh), 0.001);
@@ -534,8 +535,9 @@ export function drawArrayChart(points, range, canvasEl = null, showBarLabels = f
         ctx.setLineDash([]);
         const lbl = kwh >= 1 ? `${kwh.toFixed(1)}` : `${Math.round(kwh * 1000)}W`;
         ctx.fillStyle = mutedColor; ctx.font = '11px system-ui';
-        ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-        ctx.fillText(lbl, padL - 3, y);
+        ctx.textBaseline = 'middle';
+        if (labelsRight) { ctx.textAlign = 'left';  ctx.fillText(lbl, W - padR + 3, y); }
+        else              { ctx.textAlign = 'right'; ctx.fillText(lbl, padL - 3, y); }
       });
     }
     return;
@@ -637,9 +639,9 @@ export async function fetchBatteryChart() {
     st.lastBatteryPoints = pts;
     st.batteryChartType  = data.type || 'soc';
     if (data.type === 'soc') {
-      drawBatterySocChart(st.lastBatteryPoints);
+      drawBatterySocChart(st.lastBatteryPoints, null, true);
     } else {
-      drawBatteryKwhChart(st.lastBatteryPoints);
+      drawBatteryKwhChart(st.lastBatteryPoints, null, true);
     }
   } catch (e) {
     clearTimeout(loadingTimer);
@@ -736,7 +738,7 @@ export function drawBatterySocChart(points, canvasEl = null, showYAxis = false) 
   });
 }
 
-export function drawBatteryKwhChart(points, canvasEl = null) {
+export function drawBatteryKwhChart(points, canvasEl = null, showYAxis = false) {
   const canvas = canvasEl || document.getElementById('battery-chart');
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
@@ -761,7 +763,7 @@ export function drawBatteryKwhChart(points, canvasEl = null) {
     return;
   }
 
-  const padT = 4, padR = 2, padB = 18, padL = 2;
+  const padT = 4, padR = 2, padB = 18, padL = showYAxis ? 30 : 2;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
   const n = points.length;
@@ -797,6 +799,21 @@ export function drawBatteryKwhChart(points, canvasEl = null) {
   ctx.beginPath();
   ctx.moveTo(padL, padT + chartH); ctx.lineTo(W - padR, padT + chartH); ctx.stroke();
 
+  if (showYAxis && maxKwh > 0) {
+    [0.25, 0.5, 0.75, 1.0].forEach(f => {
+      const kwh = maxKwh * f;
+      const y   = padT + chartH - f * chartH;
+      ctx.strokeStyle = 'rgba(128,128,128,0.12)';
+      ctx.lineWidth = 0.5; ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+      ctx.setLineDash([]);
+      const lbl = kwh >= 1 ? `${kwh.toFixed(1)}` : `${Math.round(kwh * 1000)}W`;
+      ctx.fillStyle = mutedColor; ctx.font = '11px system-ui';
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(lbl, padL - 3, y);
+    });
+  }
+
   let every = 1;
   if (n > 20) every = 6; else if (n > 12) every = 4;
   else if (n > 8) every = 3; else if (n > 5) every = 2;
@@ -815,7 +832,7 @@ export function initBatteryChartTooltip() {
   const tooltip   = document.getElementById('battery-chart-tooltip');
   if (!canvas || !tooltip) return;
 
-  const padL = 2, padR = 2, padB = 18, padT = 4;
+  const padL = 30, padR = 2, padB = 18, padT = 4;
 
   canvas.addEventListener('mousemove', (e) => {
     const points = st.lastBatteryPoints;
@@ -890,7 +907,7 @@ export function initChartTooltip() {
   const tooltip   = document.getElementById('chart-tooltip');
   if (!canvas || !tooltip) return;
 
-  const padL = 2, padR = 2, padB = 18, padT = 4;
+  const padL = 2, padR = 30, padB = 18, padT = 4;
 
   canvas.addEventListener('mousemove', (e) => {
     const points = st.lastChartPoints;

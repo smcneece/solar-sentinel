@@ -5,6 +5,12 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.07.1 - July 7, 2026
+
+- Fixed the Grid Today chart using independent auto-scaling for the import and export halves; previously each half was scaled to its own maximum, making small export values appear visually equal to much larger import values; both halves now share one scale so the proportions between import and export are accurate
+- Added Y-axis kWh markings to all desktop charts (Grid Today, Production Today, Battery); previously these were mobile-only since desktop has hover tooltips, but having the scale visible at a glance is useful on both; battery kWh chart now shows Y-axis markings on mobile as well
+- Production chart Y-axis labels appear on the right side rather than the left, since the left edge is occupied by the Today/Week/Month/Year range tabs
+
 ## v2026.06.11 - June 28, 2026
 
 - Added multiple battery support on mobile: if more than one battery system is configured in the HA Energy Dashboard, selector buttons appear at the top of the mobile battery tab to switch between them, matching the desktop behavior

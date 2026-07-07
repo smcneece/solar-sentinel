@@ -766,11 +766,11 @@ async function init() {
 
   let _resizeTimer = null;
   window.addEventListener('resize', () => {
-    if (st.chartRange) drawArrayChart(st.lastChartPoints || [], st.chartRange);
-    if (st.lastGridPoints.length) drawGridChart(st.lastGridPoints, st.gridHasExport);
+    if (st.chartRange) drawArrayChart(st.lastChartPoints || [], st.chartRange, null, false, true, true);
+    if (st.lastGridPoints.length) drawGridChart(st.lastGridPoints, st.gridHasExport, null, true);
     if (st.lastBatteryPoints.length) {
-      if (st.batteryChartType === 'soc') drawBatterySocChart(st.lastBatteryPoints);
-      else drawBatteryKwhChart(st.lastBatteryPoints);
+      if (st.batteryChartType === 'soc') drawBatterySocChart(st.lastBatteryPoints, null, true);
+      else drawBatteryKwhChart(st.lastBatteryPoints, null, true);
     }
     clearTimeout(_resizeTimer);
     _resizeTimer = setTimeout(fitViewGrid, 100);
