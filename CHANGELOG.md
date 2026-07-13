@@ -5,6 +5,10 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
+## v2026.07.2 - July 2026
+
+- Fixed mobile battery SoC chart not extending the line to current time when the battery value has been stable; the desktop version already did this, matching the behavior of HA's own entity history display
+
 ## v2026.07.1 - July 7, 2026
 
 - Fixed the Grid Today chart using independent auto-scaling for the import and export halves; previously each half was scaled to its own maximum, making small export values appear visually equal to much larger import values; both halves now share one scale so the proportions between import and export are accurate

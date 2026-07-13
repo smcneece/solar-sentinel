@@ -458,7 +458,11 @@ async function fetchMobileBatteryChart(range) {
     if (!resp.ok) return;
     const data = await resp.json();
     const totalEl = document.getElementById('m-battery-soc');
-    const pts = data.points || [];
+    let pts = data.points || [];
+    if ((data.type === 'soc' || !data.type) && _mBatRange === 'today' && _mDate === todayStr() && pts.length > 0) {
+      const last = pts[pts.length - 1];
+      if (Date.now() - last.ts_ms > 60000) pts = [...pts, { ts_ms: Date.now(), soc_pct: last.soc_pct }];
+    }
     _mBatData = { points: pts, type: data.type || 'soc' };
     // Backend doesn't return current_soc; derive from last data point
     const lastSoc = (data.type === 'soc' || !data.type) && pts.length
