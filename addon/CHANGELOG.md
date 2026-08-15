@@ -5,7 +5,11 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
-## v2026.07.2 - July 2026
+## v2026.08.1 - August 2026
+
+- Added vertical crosshair to mobile chart taps: tapping a Today chart (Production, Grid, Battery SoC) shows a dashed vertical line with a draggable handle at the bottom; sliding your finger moves the line and updates the data toast in real time; the crosshair does not appear on Week/Month/Year bar charts where it would not add useful information (thanks @fish81000)
+
+## v2026.07.2 - July 12, 2026
 
 - Fixed mobile battery SoC chart not extending the line to current time when the battery value has been stable; the desktop version already did this, matching the behavior of HA's own entity history display
 

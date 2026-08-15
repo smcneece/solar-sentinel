@@ -184,6 +184,7 @@ function switchTab(name) {
 let _toastDismissListener = null;
 
 function _dismissToast(t) {
+  _clearCrosshairs();
   t.classList.remove('visible');
   setTimeout(() => { if (t.parentNode) t.remove(); }, 300);
 }
@@ -216,6 +217,71 @@ function showToast(msg, durationMs = 2000, html = false, persistent = false) {
       setTimeout(() => _dismissToast(t), durationMs);
     }
   });
+}
+
+// ── Chart crosshair overlay ───────────────────────────────────────────────
+
+const _crosshairCanvases = new Map();
+
+function _ensureCrosshairCanvas(chartCanvas) {
+  if (_crosshairCanvases.has(chartCanvas.id)) return _crosshairCanvases.get(chartCanvas.id);
+  const wrap = chartCanvas.parentElement;
+  if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+  const overlay = document.createElement('canvas');
+  overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none';
+  wrap.appendChild(overlay);
+  _crosshairCanvases.set(chartCanvas.id, overlay);
+  return overlay;
+}
+
+function _drawCrosshair(chartCanvas, touchX) {
+  const overlay = _ensureCrosshairCanvas(chartCanvas);
+  const dpr = window.devicePixelRatio || 1;
+  const W = chartCanvas.offsetWidth;
+  const H = chartCanvas.offsetHeight;
+  overlay.width  = W * dpr;
+  overlay.height = H * dpr;
+  const ctx = overlay.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const lineTop = 4;
+  const lineBot = H - 18; // top of X-axis label area
+  const r = 9;
+
+  // Dashed line, stopping short of the handle circle
+  ctx.strokeStyle = 'rgba(150,150,150,0.75)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.moveTo(touchX, lineTop);
+  ctx.lineTo(touchX, lineBot - r);
+  ctx.stroke();
+
+  // Handle circle
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.arc(touchX, lineBot, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(91,142,230,0.88)';
+  ctx.fill();
+
+  // Grip lines inside circle
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+  const hw = 5;
+  for (const dy of [-2.5, 0, 2.5]) {
+    ctx.beginPath();
+    ctx.moveTo(touchX - hw, lineBot + dy);
+    ctx.lineTo(touchX + hw, lineBot + dy);
+    ctx.stroke();
+  }
+}
+
+function _clearCrosshairs() {
+  for (const overlay of _crosshairCanvases.values()) {
+    const ctx = overlay.getContext('2d');
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+  }
 }
 
 // ── Modal helpers (panel detail modal only) ───────────────────────────────
@@ -572,6 +638,7 @@ function _redrawActiveChart() {
 }
 
 function _onOrientationChange() {
+  _clearCrosshairs();
   if (st.panels.length) renderPanelGridMobile(st.panels);
   const arcEl = document.getElementById('m-sun-arc');
   if (arcEl && st.sunData) {
@@ -803,7 +870,7 @@ function _hitFmtGrid(touchX, canvasW) {
     const net = (pt.import_kwh || 0) - (pt.export_kwh || 0);
     html += `<div style="font-weight:700;margin-top:3px;border-top:1px solid var(--border);padding-top:3px">Net: ${net >= 0 ? '+' : ''}${net.toFixed(2)} kWh</div>`;
   }
-  return html;
+  return { html, crosshair: isToday };
 }
 
 function _hitFmtProd(touchX, canvasW) {
@@ -824,8 +891,9 @@ function _hitFmtProd(touchX, canvasW) {
     pt = points[_findBarIdx(touchX, padL, canvasW, points.length)];
     header = pt.label || '';
   }
-  return `<div style="font-weight:700;margin-bottom:3px">${header}</div>` +
-         _row('#d4882a', `Production: ${(pt.kwh || 0).toFixed(2)} kWh`);
+  const html = `<div style="font-weight:700;margin-bottom:3px">${header}</div>` +
+              _row('#d4882a', `Production: ${(pt.kwh || 0).toFixed(2)} kWh`);
+  return { html, crosshair: isToday };
 }
 
 function _hitFmtBat(touchX, canvasW) {
@@ -838,26 +906,43 @@ function _hitFmtBat(touchX, canvasW) {
     const pt = points[idx];
     const { hour: h, minute: m } = tzHourMin(pt.ts_ms);
     const header = `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
-    return `<div style="font-weight:700;margin-bottom:3px">${header}</div>` +
-           _row('#43a047', `SoC: ${(pt.soc_pct || 0).toFixed(1)}%`);
+    const html = `<div style="font-weight:700;margin-bottom:3px">${header}</div>` +
+                 _row('#43a047', `SoC: ${(pt.soc_pct || 0).toFixed(1)}%`);
+    return { html, crosshair: true };
   } else {
     const pt = points[_findBarIdx(touchX, 2, canvasW, points.length)];
     let html = `<div style="font-weight:700;margin-bottom:3px">${pt.label || ''}</div>`;
     if ((pt.charged_kwh || 0) > 0)    html += _row('#43a047', `Charged: ${pt.charged_kwh.toFixed(2)} kWh`);
     if ((pt.discharged_kwh || 0) > 0) html += _row('#d4882a', `Discharged: ${pt.discharged_kwh.toFixed(2)} kWh`);
-    return html;
+    return { html, crosshair: false };
   }
 }
 
 function wireTouchToast(canvasId, hitFn) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
-  canvas.addEventListener('touchstart', e => {
-    const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-    const html = hitFn(touch.clientX - rect.left, rect.width);
-    if (html) showToast(html, 0, true, true);
-  }, { passive: true });
+
+  function _update(clientX, isMove) {
+    const rect   = canvas.getBoundingClientRect();
+    const touchX = Math.max(0, Math.min(clientX - rect.left, rect.width - 1));
+    const result = hitFn(touchX, rect.width);
+    if (!result) return;
+    const { html, crosshair } = result;
+    if (crosshair) {
+      _drawCrosshair(canvas, touchX);
+    } else if (!isMove) {
+      _clearCrosshairs();
+    }
+    if (isMove && crosshair) {
+      const existing = document.getElementById('m-toast');
+      if (existing) existing.innerHTML = html;
+    } else if (!isMove) {
+      showToast(html, 0, true, true);
+    }
+  }
+
+  canvas.addEventListener('touchstart', e => _update(e.touches[0].clientX, false), { passive: true });
+  canvas.addEventListener('touchmove',  e => { e.preventDefault(); _update(e.touches[0].clientX, true); }, { passive: false });
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
