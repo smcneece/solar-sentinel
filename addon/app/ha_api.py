@@ -6,7 +6,6 @@ WebSocket registry queries, statistics (today Wh), and history (time slider)."""
 import asyncio
 import calendar
 import datetime
-import json
 import logging
 import math
 import zoneinfo

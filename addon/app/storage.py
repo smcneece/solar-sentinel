@@ -42,8 +42,10 @@ def _load() -> dict:
 
 def _save(data: dict):
     try:
-        with open(DATA_FILE, "w") as f:
+        tmp_file = f"{DATA_FILE}.tmp"
+        with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
+        os.replace(tmp_file, DATA_FILE)
     except Exception:
         _LOGGER.exception("Failed to save data file")
 

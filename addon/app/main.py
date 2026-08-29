@@ -23,7 +23,8 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger(__name__)
 
-VERSION = "2026.08.1"
+VERSION = "2026.08.2"
+_STARTUP_TS = str(int(time.time()))  # cache-busts static assets once per addon start/restart
 
 _inverters: list = []        # discovered inverter descriptors
 _panels_cache: list = []     # latest computed panel states
@@ -224,11 +225,15 @@ async def handle_icon(request):
 
 
 def _js(path):
-    return web.Response(text=open(path).read(), content_type="application/javascript",
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+    return web.Response(text=content, content_type="application/javascript",
                         headers={"Cache-Control": "no-store"})
 
 def _css(path):
-    return web.Response(text=open(path).read(), content_type="text/css",
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+    return web.Response(text=content, content_type="text/css",
                         headers={"Cache-Control": "no-store"})
 
 async def handle_app_css(request):    return _css("/app/app.css")
@@ -332,7 +337,6 @@ async def handle_api_layout_post(request):
         data = await request.json()
         result = storage.save_layout(data)
         # Apply updated names to cache immediately
-        global _panels_cache
         for p in _panels_cache:
             if p["entity_id"] in result and result[p["entity_id"]]:
                 p["name"] = result[p["entity_id"]]
@@ -380,7 +384,6 @@ async def handle_api_rename(request):
         storage.save_layout(layout)
 
         # Apply to panels cache immediately
-        global _panels_cache
         for p in _panels_cache:
             if p["entity_id"] == entity_id:
                 if name:
@@ -1082,14 +1085,12 @@ async def handle_api_debug(request):
 # ── HTML template injection ───────────────────────────────────────────────
 
 def _build_html(base: str) -> str:
-    import time
-    with open("/app/index.html", "r") as f:
+    with open("/app/index.html", "r", encoding="utf-8") as f:
         template = f.read()
-    ts = str(int(time.time()))
     return (template
             .replace("{{BASE}}", base)
             .replace("{{VERSION}}", VERSION)
-            .replace("{{TS}}", ts))
+            .replace("{{TS}}", _STARTUP_TS))
 
 
 # ── Startup and app wiring ────────────────────────────────────────────────

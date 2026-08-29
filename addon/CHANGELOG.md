@@ -5,7 +5,13 @@
 
 For full release notes and details on each version, see the [GitHub Releases page](https://github.com/smcneece/solar-sentinel/releases).
 
-## v2026.08.1 - August 2026
+## v2026.08.2 - August 29, 2026
+
+- Data file writes (layout, settings, grid) are now atomic: the addon writes to a temp file and swaps it into place, so a power loss or container restart mid-write can no longer corrupt the saved layout
+- Static JS/CSS files are no longer re-read and cache-busted on every single page load; the cache-busting timestamp is now set once at addon startup, so the browser can cache these files normally during a session and only re-fetches them after an addon restart or update
+- Minor code cleanup from a third-party code audit: removed a dead import map entry pointing at a file that no longer exists, removed an unused import, and removed a couple of unnecessary global declarations; no user-facing behavior changes
+
+## v2026.08.1 - August 15, 2026
 
 - Added vertical crosshair to mobile chart taps: tapping a Today chart (Production, Grid, Battery SoC) shows a dashed vertical line with a draggable handle at the bottom; sliding your finger moves the line and updates the data toast in real time; the crosshair does not appear on Week/Month/Year bar charts where it would not add useful information (thanks @fish81000)
 
